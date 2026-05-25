@@ -72,7 +72,8 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
     depths_SM, depths_TS)
   gof
   # fwrite(cbind(; time=dates, df_ET = df_ET .* 3600), "./Project_ChinaFlux/df_ET.csv")
-  ## 参数优化模块
+  
+  ## 3. 参数优化模块
   opts = [
     (; path=[:r_drainage], name=:r_drainage, value=model.r_drainage),
     (; path=[:veg, :Ω], name=:Ω, value=model.veg.Ω),
@@ -95,7 +96,7 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
 end
 
 
-for SITE in SITES
+for SITE in SITES[1:1]
   try
     RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/NSE", goal=:NSE, goal_multiplier=-1)
   catch ex
