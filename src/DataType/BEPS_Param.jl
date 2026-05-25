@@ -79,7 +79,7 @@ function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
   soil.ψ_min = Cdouble(params.ψ_min)
   soil.alpha = Cdouble(params.alpha)
 
-  soil.θ_vfc[1:N] .= Cdouble.(hydraulic.θ_vfc)
+  # soil.θ_vfc[1:N] .= Cdouble.(hydraulic.θ_vfc)
   soil.θ_vwp[1:N] .= Cdouble.(hydraulic.θ_vwp)
   soil.θ_sat[1:N] .= Cdouble.(hydraulic.θ_sat)
   soil.K_sat[1:N] .= Cdouble.(hydraulic.K_sat)
@@ -109,7 +109,8 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
 
   (; hydraulic, thermal) = params
 
-  for field in (:θ_vfc, :θ_vwp, :θ_sat, :K_sat, :ψ_sat, :b)
+  # :θ_vfc
+  for field in (:θ_vwp, :θ_sat, :K_sat, :ψ_sat, :b)
     dest = getfield(hydraulic, field)
     src = getfield(soil, field)
     if length(dest) != N

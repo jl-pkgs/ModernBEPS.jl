@@ -57,7 +57,7 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
 
   K_sat = FT.(p.K_sat[1:n])    # [cm h-1]
   θ_sat = fill(FT(p.θ_sat), n) # [%]
-  θ_vfc = fill(FT(p.θ_vfc), n) # [%]
+  # θ_vfc = fill(FT(p.θ_vfc), n) # [%]
   θ_vwp = fill(FT(p.θ_vwp), n) # [%]
   ψ_sat = FT.(p.ψ_sat[1:n])    # [m], positive suction at saturation (Campbell 1974 convention)
 
@@ -68,7 +68,7 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   ρ_soil = FT.(SOIL_THERMAL_DENSITY[1:n]) # [kg m-3]
   V_SOM = FT.(SOIL_ORGANIC_MATTER[1:n])   # [volume fraction], 0-1
 
-  hydraulic = ParamSoilHydraulicLayers{FT,N}(; θ_vfc, θ_vwp, θ_sat, K_sat, ψ_sat, b)
+  hydraulic = ParamSoilHydraulicLayers{FT,N}(; θ_vwp, θ_sat, K_sat, ψ_sat, b)
   thermal = ParamSoilThermalLayers{FT,N}(; κ_dry, ρ_soil, V_SOM)
   return hydraulic, thermal
 end

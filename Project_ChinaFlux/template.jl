@@ -10,7 +10,7 @@ model = ParamBEPS(VegType, SoilType)
 ## 初始化状态变量
 Ta = 20.0
 Tsoil0 = Ta
-θ0 = model.hydraulic.θ_vfc[1] .* 0.6
+θ0 = model.hydraulic.θ_sat[1] .* 0.6
 z_snow0 = 0.0
 
 state, model = setup(model; Ta, Tsoil=Float64(Tsoil0), θ0=Float64(θ0), z_snow=Float64(z_snow0))

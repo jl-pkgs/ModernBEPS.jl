@@ -1,32 +1,15 @@
-# 参考CLM3.5的方案
-# 
-# Soil moisture is predicted from a 5-layer model (as with soil
-# temperature), in which the vertical soil moisture transport is governed
-# by infiltration, runoff, gradient diffusion, gravity, and root
+# soil moisture transport is governed by infiltration, runoff, gradient diffusion, 
+# gravity, and root
 # extraction through canopy transpiration.  The net water applied to the
 # surface layer is the snowmelt plus precipitation plus the throughfall
 # of canopy dew minus surface runoff and evaporation.
 # CLM3.5 uses a zero-flow bottom boundary condition.
 
-"""
-    update_surface_water!(st, ps, kstep) -> inf
-
-更新地表积水 `state.z_water`：处理降雨入渗和地表径流，返回入渗率 [m/s]。
-与 `UpdateSoilMoisture` 共享相同物理，但不更新 θ，适用于观测土壤水模式。
-"""
-function update_surface_water!(st::S, ps::P, kstep::Float64) where {
-  S<:Union{StateBEPS,Soil}, P<:Union{ParamBEPS,Soil}}
-
-  n = st.n_layer
-  (; θ_sat, K_sat, ψ_sat, b) = get_hydraulic(ps)
-  (; θ, f_water, Tsoil_c, dz, z_water, r_rain_g) = st
-  r_drainage = ps.r_drainage
-
+function update_SoilWaterFrac!(f_water::Vector{Float64}, Tsoil_c::Vector{Float64}; n::Integer=5)
+  # 注意：Tsoil_c 长度通常是 n，但这里循环到 n+1，需确认 Tsoil_c 实际分配长度。
+  # 假设 Tsoil_c 长度足够，或者边界处理
   @inbounds for i in 1:n+1
-    # 注意：Tsoil_c 长度通常是 n，但这里循环到 n+1，需确认 Tsoil_c 实际分配长度。
-    # 假设 Tsoil_c 长度足够，或者边界处理
-    # Soil struct 定义 dz 为 Vector{Float64} = zeros(10)，所以可以到 n+1 (5+1=6)
-    val_T = i <= length(Tsoil_c) ? Tsoil_c[i] : Tsoil_c[end] # 简单边界保护
+    val_T = i <= length(Tsoil_c) ? Tsoil_c[i] : Tsoil_c[end] # 边界保护
     if val_T > 0.0
       f_water[i] = 1.0
     elseif val_T < -1.0
@@ -35,34 +18,48 @@ function update_surface_water!(st::S, ps::P, kstep::Float64) where {
       f_water[i] = 0.1 + 0.9 * (val_T + 1.0)
     end
   end
-
-  # Max infiltration calculation
-  # K_sat * (1 + (θ_sat - θ_prev) / dz * ψ_sat / θ_sat * b)
-  K_sat_ms_1 = K_sat[1] / 360000.0
-  inf_max = f_water[1] * K_sat_ms_1 * (1 + (θ_sat[1] - θ[1]) / dz[1] * ψ_sat[1] * b[1] / θ_sat[1])
-  inf = max(f_water[1] * (z_water / kstep + r_rain_g), 0)
-  inf = clamp(inf, 0, inf_max)
-
-  # Ponded water after runoff
-  st.z_water = (z_water / kstep + r_rain_g - inf) * kstep * r_drainage
-  return inf
 end
 
 
-# 旧版本：兼容 Soil 结构体
-UpdateSoilMoisture(soil::Soil, kstep::Float64) = UpdateSoilMoisture(soil, soil, kstep)
+function cal_infiltration(θ::V, dz::V,
+  K_sat::V, θ_sat::V, ψ_sat::V, b::V,
+  frac_water::T, z_water::T, r_rain_g::T, kstep::T) where {T<:AbstractFloat,V<:AbstractVector{T}}
 
-# 新版本：JAX 风格 (st, ps) 签名
-function UpdateSoilMoisture(st::S, ps::P, kstep::Float64; fix_sm::Bool=false) where {
+  _Ksat = K_sat[1] / 360000.0 # [cm h-1] -> [m s-1]
+  # K_sat * (1 + (θ_sat - θ_prev) / dz * ψ_sat / θ_sat * b)
+  inf_max = frac_water * _Ksat * (1 + (θ_sat[1] - θ[1]) / dz[1] * ψ_sat[1] * b[1] / θ_sat[1])
+  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0)
+  clamp(inf_wa, 0, inf_max)
+end
+
+
+"""
+    update_surface_water!(st, ps, kstep) -> inf
+
+更新地表积水 `state.z_water`：处理降雨入渗和地表径流，返回入渗率 [m/s]。
+与 `UpdateSoilMoisture` 共享相同物理，但不更新 θ，适用于观测土壤水模式。
+"""
+function update_surface_water!(st::S, ps::P, kstep::Float64) where {
+  S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
+
+  n = st.n_layer
+  (; θ_sat, K_sat, ψ_sat, b) = get_hydraulic(ps)
+  (; θ, f_water, Tsoil_c, dz, z_water, r_rain_g) = st
+  r_drainage = ps.r_drainage
+
+  update_SoilWaterFrac!(f_water, Tsoil_c; n)
+  inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat, b, f_water[1], z_water, r_rain_g, kstep)
+  st.z_water = (z_water / kstep + r_rain_g - inf) * kstep * r_drainage # Ponded water after runoff
+  inf
+end
+
+
+function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
   (; θ_sat, K_sat, ψ_sat, b, θ_vwp) = get_hydraulic(ps)
-  (; dz, f_water, Kavg, Kmid, ψ, θ, θ_prev, ETi, r_waterflow, ice_ratio) = st
-
-  θ_prev .= θ
-  inf = update_surface_water!(st, ps, kstep)
-  fix_sm && return # 如果 fix_sm=true，则只更新地表积水，不改变土壤水分状态
+  (; dz, f_water, Kavg, Kmid, ψ, θ, ETi, r_waterflow) = st
 
   total_t, max_Fb = 0.0, 0.0
   @inbounds while total_t < kstep
@@ -105,7 +102,27 @@ function UpdateSoilMoisture(st::S, ps::P, kstep::Float64; fix_sm::Bool=false) wh
       θ[i] = clamp(θ[i], θ_vwp[i], θ_sat[i])
     end
   end
+end
 
+
+# 旧版本：兼容 Soil 结构体
+UpdateSoilMoisture(soil::Soil, kstep::Float64) = UpdateSoilMoisture(soil, soil, kstep)
+
+
+# 新版本：JAX 风格 (st, ps) 签名
+function UpdateSoilMoisture(st::S, ps::P, kstep::Float64; fix_sm::Bool=false) where {
+  S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
+
+  n = st.n_layer
+  (; θ, θ_prev, ice_ratio) = st
+
+  θ_prev .= θ
+  inf = update_surface_water!(st, ps, kstep)
+  fix_sm && return # 如果 fix_sm=true，则只更新地表积水，不改变土壤水分状态
+
+  solve_SM_beps(st, ps, inf, kstep)
+
+  # update ice ratio
   for i in 1:n
     ice_ratio[i] *= θ_prev[i] / θ[i]
     ice_ratio[i] = min(1.0, ice_ratio[i])

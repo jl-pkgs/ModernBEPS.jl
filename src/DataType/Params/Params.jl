@@ -47,10 +47,9 @@ end
 @bounds @with_kw mutable struct ParamSoilHydraulic{FT<:AbstractFloat}
   θ_vfc::FT = FT(0.30) | (0.10, 0.45)   # volumetric field capacity [-]
   θ_vwp::FT = FT(0.10) | (0.02, 0.30)   # volumetric wilting point [-]
+
   θ_sat::FT = FT(0.45) | (0.25, 0.70)   # volumetric saturation [-]
-
   K_sat::FT = FT(5.0) | (0.01, 50.0)   # saturated hydraulic conductivity [cm h-1]
-
   ψ_sat::FT = FT(-0.5) | (-2.0, -0.01)  # matric potential at saturation [m]
   b::FT = FT(5.0) | (1.5, 15.0)    # Campbell parameter [-]
 end

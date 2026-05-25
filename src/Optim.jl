@@ -8,7 +8,7 @@ include("check_forcing.jl")
 function InitState0(model::ParamBEPS{FT}, forcing::MetSeries{FT}) where {FT<:AbstractFloat}
   Ta = forcing.Tair[1]
   Tsoil0 = Ta
-  θ0 = model.hydraulic.θ_vfc[1]  # 初始化为田间持水量（避免低于凋萎含水量）
+  θ0 = model.hydraulic.θ_sat[1] * 0.8  # 初始化为田间持水量（避免低于凋萎含水量）
   z_snow0 = 0.0
   BEPS._init_state(model, Tsoil0, Ta, θ0, z_snow0) # state
 end
