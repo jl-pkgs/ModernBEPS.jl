@@ -1,7 +1,7 @@
 export ParamVeg
-export ParamSoilHydraulic, ParamSoilThermal, ParamSoil,
-  ParamSoilHydraulicLayers, ParamSoilThermalLayers
+export ParamSoilHydraulic, ParamSoilThermal, ParamSoil
 export ParamBEPS, BEPSCampbell, BEPSCampbellLayers
+export get_params, parameters, update!, get_opt_info
 export filter_params, update_params!
 
 
@@ -9,9 +9,8 @@ using Parameters, DataFrames
 import ModelParams: @metadata, @units, units, @bounds, bounds, split_bounds
 import ModelParams: AbstractSoilModel, AbstractRetention, MultiLayer
 import ModelParams: HydraulicProfile, ThermalProfile, ThermalBaseLayers, KvLayers
+import ModelParams: get_params, parameters, update!, get_opt_info
 import ModelParams: filter_params, update_params!
-
-include("macro.jl")
 
 @bounds @with_kw mutable struct ParamVeg{FT<:AbstractFloat}
   # lc::Int = 1
@@ -64,9 +63,6 @@ end
   ρ_soil::FT = FT(1300.0) | (800.0, 1800.0) # soil bulk density [kg m-3]
   V_SOM::FT = FT(0.02) | (0.0, 0.3)      # organic matter volume fraction [-]
 end
-
-@make_layers_struct ParamSoilHydraulic
-@make_layers_struct ParamSoilThermal
 
 @with_kw mutable struct ParamSoil{FT<:AbstractFloat}
   hydraulic::ParamSoilHydraulic{FT} = ParamSoilHydraulic{FT}()

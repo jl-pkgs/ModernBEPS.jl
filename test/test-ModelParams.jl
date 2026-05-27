@@ -2,24 +2,21 @@ using BEPS, Test
 
 
 @testset "Model Parameters" begin
-  # xs = ParamSoilHydraulicLayers{Float64,4}()
   model = ParamBEPS{Float64}(; N=5)
   params = parameters(model)
   display(model)
 
-  update!(model, [[:r_drainage]], [0.4]; params)
-  @test model.r_drainage == 0.4
+  paths = [
+    [:r_drainage],
+    [:hydraulic, :profile, :b, 4]
+  ]
+  values = [0.4, 4.0]
 
-  p_hydraulic = filter_params(model, :hydraulic)
-  update_params!(model, [[:hydraulic, :profile, :b, 4]], [4.0]; params=p_hydraulic)
+  update!(model, paths, values; params)
+  @test model.r_drainage == 0.4
   @test model.:hydraulic.b[4] == 4.0
 
+  p_hydraulic = filter_params(model, :hydraulic)
   @test all(path -> path[1] === :hydraulic, p_hydraulic.path)
+  @test size(p_hydraulic, 1) == 25
 end
-
-# @testset "ParamSoilHydraulicLayers" begin
-#   x = ParamSoilHydraulic{Float64}()
-#   xs = ParamSoilHydraulicLayers{Float64,4}()
-#   length(get_bounds(x)) == 6
-#   length(get_bounds(xs)) == 24
-# end
