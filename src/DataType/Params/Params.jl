@@ -1,11 +1,15 @@
 export ParamVeg
 export ParamSoilHydraulic, ParamSoilThermal, ParamSoil,
   ParamSoilHydraulicLayers, ParamSoilThermalLayers
-export ParamBEPS
+export ParamBEPS, BEPSCampbell, BEPSCampbellLayers
+export filter_params, update_params!
 
 
 using Parameters, DataFrames
 import ModelParams: @metadata, @units, units, @bounds, bounds, split_bounds
+import ModelParams: AbstractSoilModel, AbstractRetention, MultiLayer
+import ModelParams: HydraulicProfile, ThermalProfile, ThermalBaseLayers, KvLayers
+import ModelParams: filter_params, update_params!
 
 include("macro.jl")
 

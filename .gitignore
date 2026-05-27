@@ -52,3 +52,4 @@ log.txt
 *.png
 TODO.md
 *.jld2
+.claude

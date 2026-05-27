@@ -49,7 +49,7 @@ using BEPS, Test
     @test model.hydraulic.θ_sat[1] ≈ 0.453
     @test model.hydraulic.θ_vwp[1] ≈ 0.10
     @test model.hydraulic.b[1] ≈ 3.1
-    @test model.hydraulic.K_sat[1] ≈ 0.0000072
+    @test model.hydraulic.K_sat[1] ≈ 2.592
 
     # Test soil thermal parameters
     @test model.thermal.κ_dry[1] ≈ 8.0
@@ -85,7 +85,7 @@ using BEPS, Test
     @test model.hydraulic.θ_sat[1] ≈ 0.437
     @test model.hydraulic.θ_vwp[1] ≈ 0.03
     @test model.hydraulic.b[1] ≈ 1.7
-    @test model.hydraulic.K_sat[1] ≈ 0.000058
+    @test model.hydraulic.K_sat[1] ≈ 20.88
 
     # Test soil thermal parameters
     @test model.thermal.κ_dry[1] ≈ 8.6
@@ -145,8 +145,8 @@ end
     for (soil_type, name) in soil_types
       hydraulic, thermal = InitParam_Soil(soil_type, 5, Float64)
 
-      @test hydraulic isa BEPS.ParamSoilHydraulicLayers{Float64,5}
-      @test thermal isa BEPS.ParamSoilThermalLayers{Float64,5}
+      @test hydraulic isa BEPS.HydraulicProfile{Float64,5}
+      @test thermal isa BEPS.ThermalProfile{Float64,5}
       @test length(hydraulic.θ_sat) == 5
       @test length(thermal.κ_dry) == 5
 
@@ -154,7 +154,7 @@ end
       @test all(hydraulic.θ_sat .> 0)
       @test all(hydraulic.θ_vwp .> 0)
       @test all(hydraulic.K_sat .> 0)
-      @test all(hydraulic.ψ_sat .< 0)  # water potential should be negative
+      @test all(hydraulic.ψ_sat .> 0)
       @test all(hydraulic.b .> 0)
       @test all(thermal.κ_dry .> 0)
       @test all(thermal.ρ_soil .> 0)

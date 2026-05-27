@@ -120,7 +120,7 @@ function UpdateSoilMoisture(st::S, ps::P, kstep::Float64; fix_sm::Bool=false) wh
   inf = update_surface_water!(st, ps, kstep)
   fix_sm && return # 如果 fix_sm=true，则只更新地表积水，不改变土壤水分状态
 
-  solve_SM_beps(st, ps, inf, kstep)
+  solve_SM_beps(st, ps, inf, kstep) # 求解土壤水
 
   # update ice ratio
   for i in 1:n

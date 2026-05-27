@@ -52,24 +52,26 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   idx = find_SoilType(SoilType)
   p = SOIL_PARAMS[idx]
 
-  n = min(N, 5)
-  b = FT.(p.b[1:n])            # [-], campbell's b parameter
+  b = _fit_layers(FT, p.b, N)            # [-], campbell's b parameter
 
-  K_sat = FT.(p.K_sat[1:n])    # [cm h-1]
-  θ_sat = fill(FT(p.θ_sat), n) # [%]
+  K_sat = _fit_layers(FT, p.K_sat, N)    # [cm h-1]
+  θ_sat = fill(FT(p.θ_sat), N) # [%]
   # θ_vfc = fill(FT(p.θ_vfc), n) # [%]
-  θ_vwp = fill(FT(p.θ_vwp), n) # [%]
-  ψ_sat = FT.(p.ψ_sat[1:n])    # [m], positive suction at saturation (Campbell 1974 convention)
+  θ_vwp = fill(FT(p.θ_vwp), N) # [%]
+  ψ_sat = _fit_layers(FT, p.ψ_sat, N)    # [m], positive suction at saturation (Campbell 1974 convention)
 
   SOIL_THERMAL_DENSITY = [1300.0, 1500.0, 1517.0, 1517.0, 1517.0] # [kg m-3]
   SOIL_ORGANIC_MATTER = [0.05, 0.02, 0.01, 0.01, 0.003]           # volume fraction, 0-1
 
-  κ_dry = fill(FT(p.κ_dry), n) # [W m-1 K-1]
-  ρ_soil = FT.(SOIL_THERMAL_DENSITY[1:n]) # [kg m-3]
-  V_SOM = FT.(SOIL_ORGANIC_MATTER[1:n])   # [volume fraction], 0-1
+  κ_dry = fill(FT(p.κ_dry), N) # [W m-1 K-1]
+  ρ_soil = _fit_layers(FT, SOIL_THERMAL_DENSITY, N) # [kg m-3]
+  V_SOM = _fit_layers(FT, SOIL_ORGANIC_MATTER, N)   # [volume fraction], 0-1
 
-  hydraulic = ParamSoilHydraulicLayers{FT,N}(; θ_vwp, θ_sat, K_sat, ψ_sat, b)
-  thermal = ParamSoilThermalLayers{FT,N}(; κ_dry, ρ_soil, V_SOM)
+  dz = _default_dz(FT, N)
+  profile = BEPSCampbellLayers{FT,N}(; θ_vwp, θ_sat, Ksat=K_sat, ψ_sat, b)
+  kv = KvLayers{FT,N}(; kv=K_sat)
+  hydraulic = HydraulicProfile{FT,N}(profile, kv, FT.(100 .* dz))
+  thermal = ThermalProfile{FT,N}(ThermalBaseLayers{FT,N}(; κ_dry, ρ_soil, V_SOM))
   return hydraulic, thermal
 end
 

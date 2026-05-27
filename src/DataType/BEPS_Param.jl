@@ -1,20 +1,95 @@
-@bounds @with_kw_noshow mutable struct ParamBEPS{FT<:AbstractFloat}
-  N::Int = 5
-  dz::Vector{FT} = FT[0.05, 0.10, 0.20, 0.40, 1.25]  # 土壤层厚度 [m], BEPS V2023
-  r_drainage::FT = Cdouble(0.50) | (0.2, 0.7)  # ? 地表排水速率（地表汇流），可考虑采用曼宁公式
+const _BEPS_DZ = (0.05, 0.10, 0.20, 0.40, 1.25)
 
-  ψ_min::FT = Cdouble(33.0)  # [m], about 0.10~0.33 MPa开始胁迫点
-  alpha::FT = Cdouble(0.4)   # [-], 土壤水限制因子参数，He 2017 JGR-B, Eq. 4
+function _default_dz(::Type{FT}, N::Int) where {FT<:AbstractFloat}
+  base = FT.(_BEPS_DZ)
+  N <= length(base) && return collect(base[1:N])
+  return [collect(base); fill(last(base), N - length(base))]
+end
 
-  hydraulic::ParamSoilHydraulicLayers{FT} = ParamSoilHydraulicLayers{FT,N}()
-  thermal::ParamSoilThermalLayers{FT} = ParamSoilThermalLayers{FT,N}()
+_fit_layers(::Type{FT}, values, N::Int) where {FT<:AbstractFloat} = begin
+  xs = FT.(collect(values))
+  length(xs) >= N ? xs[1:N] : [xs; fill(last(xs), N - length(xs))]
+end
 
+@bounds @with_kw mutable struct BEPSCampbell{FT<:Real} <: AbstractRetention{FT}
+  θ_vwp::FT = FT(0.10) | (0.02, 0.30)
+  θ_sat::FT = FT(0.45) | (0.25, 0.70)
+  Ksat::FT = FT(5.0) | nothing
+  ψ_sat::FT = FT(0.5) | (0.01, 2.0)
+  b::FT = FT(5.0) | (1.5, 15.0)
+end
+
+const BEPSCampbellLayers{FT,N} = MultiLayer{FT,N,BEPSCampbell{FT}}
+
+_layer_vector(::Type{FT}, value::AbstractVector, N::Int) where {FT<:AbstractFloat} = _fit_layers(FT, value, N)
+_layer_vector(::Type{FT}, value::Number, N::Int) where {FT<:AbstractFloat} = fill(FT(value), N)
+
+function BEPSCampbellLayers{FT,N}(; θ_vwp=FT(0.10), θ_sat=FT(0.45),
+  Ksat=FT(5.0), ψ_sat=FT(0.5), b=FT(5.0)) where {FT<:AbstractFloat,N}
+
+  data = (;
+    θ_vwp = _layer_vector(FT, θ_vwp, N),
+    θ_sat = _layer_vector(FT, θ_sat, N),
+    Ksat  = _layer_vector(FT, Ksat, N),
+    ψ_sat = _layer_vector(FT, ψ_sat, N),
+    b     = _layer_vector(FT, b, N)
+  )
+  MultiLayer{FT,N,BEPSCampbell{FT},typeof(data)}(data)
+end
+
+function Base.getproperty(x::HydraulicProfile, name::Symbol)
+  name in (:profile, :layers, :kv, :dz_cm) && return getfield(x, name)
+  profile = getfield(x, :profile)
+  name === :K_sat && return getproperty(profile, :Ksat)
+  return getproperty(profile, name)
+end
+
+function Base.getproperty(x::ThermalProfile, name::Symbol)
+  name in (:profile, :layers) && return getfield(x, name)
+  return getproperty(getfield(x, :profile), name)
+end
+
+@bounds @with_kw_noshow mutable struct ParamBEPS{FT<:AbstractFloat,N,
+  H<:HydraulicProfile{FT,N},T<:ThermalProfile{FT,N}} <: AbstractSoilModel{FT,N}
+  dz::Vector{FT} = _default_dz(FT, N)
+  r_drainage::FT = FT(0.50) | (0.2, 0.7)
+
+  ψ_min::FT = FT(33.0)
+  alpha::FT = FT(0.4)
+
+  hydraulic::H
+  thermal::T
   veg::ParamVeg{FT} = ParamVeg{FT}()
 end
 
+nlayer(::ParamBEPS{FT,N}) where {FT,N} = N
+
+function Base.getproperty(x::ParamBEPS, name::Symbol)
+  name === :N && return nlayer(x)
+  name === :r_root_decay && return getfield(x, :veg).r_root_decay
+  return getfield(x, name)
+end
+
+function ParamBEPS{FT,N}(hydraulic::H, thermal::T; dz=_default_dz(FT, N), kwargs...) where {
+  FT<:AbstractFloat,N,H<:HydraulicProfile{FT,N},T<:ThermalProfile{FT,N}}
+
+  dz = FT.(collect(dz))
+  hydraulic.dz_cm = FT.(100 .* dz)
+  ParamBEPS{FT,N,H,T}(; dz, hydraulic, thermal, kwargs...)
+end
+
+function ParamBEPS{FT,N}(; dz=_default_dz(FT, N), kwargs...) where {FT<:AbstractFloat,N}
+  dz = FT.(collect(dz))
+  hydraulic = HydraulicProfile{FT,N}(BEPSCampbellLayers{FT,N}(), KvLayers{FT,N}(), FT.(100 .* dz))
+  thermal = ThermalProfile{FT,N}(ThermalBaseLayers{FT,N}())
+  ParamBEPS{FT,N}(hydraulic, thermal; dz, kwargs...)
+end
+
+ParamBEPS{FT}(; N::Int=5, kwargs...) where {FT<:AbstractFloat} = ParamBEPS{FT,N}(; kwargs...)
+
 # `kw...`: other params like, `r_drainage`
 function ParamBEPS(VegType::Union{AbstractString,Integer}, SoilType::Union{AbstractString,Integer};
-  N::Int=5, FT=Float64, kw...)
+  N::Int=5, FT::Type{<:AbstractFloat}=Float64, kw...)
 
   veg = InitParam_Veg(VegType; FT)
   hydraulic, thermal = InitParam_Soil(SoilType, N, FT)
@@ -22,9 +97,8 @@ function ParamBEPS(VegType::Union{AbstractString,Integer}, SoilType::Union{Abstr
   ψ_min = veg.is_bforest ? FT(10.0) : FT(33.0) # 开始胁迫点
   alpha = veg.is_bforest ? FT(1.5) : FT(0.4)   # 土壤水限制因子参数，He 2017 JGR-B, Eq. 4
 
-  ParamBEPS{FT}(;
-    N, kw..., ψ_min, alpha,
-    hydraulic, thermal, veg
+  ParamBEPS{FT,N}(hydraulic, thermal;
+    kw..., ψ_min, alpha, veg
   )
 end
 
@@ -70,7 +144,7 @@ function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
 
   (; hydraulic, thermal, N) = params
   soil.n_layer = Cint(N)
-  soil.dz[1:5] .= [0.05, 0.10, 0.20, 0.40, 1.25] # BEPS V2023, 土壤层厚度[m]
+  soil.dz[1:N] .= params.dz[1:N]
 
   soil.r_drainage = Cdouble(params.r_drainage)
   soil.r_root_decay = Cdouble(params.veg.r_root_decay)
@@ -95,7 +169,7 @@ Params2Soil!(soil::AbstractSoil, params::Nothing) = nothing
 
 function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
   N = Int(soil.n_layer)
-  params.N = N
+  N == params.N || throw(ArgumentError("Cannot write $N soil layers into ParamBEPS{$FT,$(params.N)}."))
 
   params.r_drainage = FT(soil.r_drainage)
   params.veg.r_root_decay = FT(soil.r_root_decay)
@@ -109,23 +183,21 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
 
   (; hydraulic, thermal) = params
 
-  # :θ_vfc
-  for field in (:θ_vwp, :θ_sat, :K_sat, :ψ_sat, :b)
-    dest = getfield(hydraulic, field)
-    src = getfield(soil, field)
-    if length(dest) != N
-      resize!(dest, N)
-    end
-    dest .= FT.(src[1:N])
-  end
+  hydraulic.profile.θ_vwp .= FT.(soil.θ_vwp[1:N])
+  hydraulic.profile.θ_sat .= FT.(soil.θ_sat[1:N])
+  hydraulic.profile.Ksat .= FT.(soil.K_sat[1:N])
+  hydraulic.kv.kv .= FT.(soil.K_sat[1:N])
+  hydraulic.profile.ψ_sat .= FT.(soil.ψ_sat[1:N])
+  hydraulic.profile.b .= FT.(soil.b[1:N])
+  hydraulic.dz_cm .= FT.(100 .* params.dz)
 
-  for field in (:κ_dry, :ρ_soil, :V_SOM)
-    dest = getfield(thermal, field)
-    src = getfield(soil, field)
-    if length(dest) != N
-      resize!(dest, N)
-    end
-    dest .= FT.(src[1:N])
+  thermal.profile.κ_dry .= FT.(soil.κ_dry[1:N])
+  thermal.profile.ρ_soil .= FT.(soil.ρ_soil[1:N])
+  thermal.profile.V_SOM .= FT.(soil.V_SOM[1:N])
+
+  for i in 1:N
+    hydraulic.layers[i] = hydraulic.profile[i]
+    thermal.layers[i] = thermal.profile[i]
   end
   return params
 end
