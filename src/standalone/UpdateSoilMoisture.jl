@@ -54,7 +54,7 @@ function UpdateSoilMoisture(soil::Soil, kstep::Float64)
       else
         θ[i] += (soil.r_waterflow[i-1] - soil.r_waterflow[i] - soil.ETi[i]) * Δt / dz[i]
       end
-      θ[i] = clamp(θ[i], soil.θ_vwp[i], θ_sat[i])
+      θ[i] = clamp(θ[i], soil.θ_res[i], θ_sat[i])
     end
   end
 

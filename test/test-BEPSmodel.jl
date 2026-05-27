@@ -25,7 +25,7 @@ using BEPS, Test
     # Test soil hydraulic parameters (loam)
     @test length(model.hydraulic.θ_sat) == 5
     @test model.hydraulic.θ_sat[1] ≈ 0.463
-    @test model.hydraulic.θ_vwp[1] ≈ 0.12
+    @test model.hydraulic.θ_res[1] ≈ 0.12
     @test model.hydraulic.b[1] ≈ 4.5
 
     # Test soil thermal parameters
@@ -47,7 +47,7 @@ using BEPS, Test
 
     # Test soil hydraulic parameters (sandy loam)
     @test model.hydraulic.θ_sat[1] ≈ 0.453
-    @test model.hydraulic.θ_vwp[1] ≈ 0.10
+    @test model.hydraulic.θ_res[1] ≈ 0.10
     @test model.hydraulic.b[1] ≈ 3.1
     @test model.hydraulic.K_sat[1] ≈ 2.592
 
@@ -67,7 +67,7 @@ using BEPS, Test
 
     # Test soil hydraulic parameters (clay)
     @test model.hydraulic.θ_sat[1] ≈ 0.475
-    @test model.hydraulic.θ_vwp[1] ≈ 0.27
+    @test model.hydraulic.θ_res[1] ≈ 0.27
     @test model.hydraulic.b[1] ≈ 7.6
 
     # Test soil thermal parameters
@@ -83,7 +83,7 @@ using BEPS, Test
 
     # Test soil hydraulic parameters (sand)
     @test model.hydraulic.θ_sat[1] ≈ 0.437
-    @test model.hydraulic.θ_vwp[1] ≈ 0.03
+    @test model.hydraulic.θ_res[1] ≈ 0.03
     @test model.hydraulic.b[1] ≈ 1.7
     @test model.hydraulic.K_sat[1] ≈ 20.88
 
@@ -152,7 +152,7 @@ end
 
       # All values should be positive (except ψ_sat which is negative)
       @test all(hydraulic.θ_sat .> 0)
-      @test all(hydraulic.θ_vwp .> 0)
+      @test all(hydraulic.θ_res .> 0)
       @test all(hydraulic.K_sat .> 0)
       @test all(hydraulic.ψ_sat .> 0)
       @test all(hydraulic.b .> 0)
@@ -164,12 +164,12 @@ end
   @testset "Physical Constraints" begin
     hydraulic, thermal = InitParam_Soil(4, 5, Float64)
 
-    # θ_vwp < θ_sat (wilting point less than saturation)
-    @test all(hydraulic.θ_vwp .< hydraulic.θ_sat)
+    # θ_res < θ_sat (wilting point less than saturation)
+    @test all(hydraulic.θ_res .< hydraulic.θ_sat)
 
     # Reasonable ranges
     @test all(0 .< hydraulic.θ_sat .< 1)
-    @test all(0 .< hydraulic.θ_vwp .< 1)
+    @test all(0 .< hydraulic.θ_res .< 1)
     @test all(hydraulic.K_sat .> 0)
     @test all(hydraulic.b .> 0)
   end

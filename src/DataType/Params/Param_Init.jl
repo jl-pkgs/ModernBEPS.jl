@@ -57,7 +57,7 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   K_sat = _fit_layers(FT, p.K_sat, N)    # [cm h-1]
   θ_sat = fill(FT(p.θ_sat), N) # [%]
   # θ_vfc = fill(FT(p.θ_vfc), n) # [%]
-  θ_vwp = fill(FT(p.θ_vwp), N) # [%]
+  θ_res = fill(FT(p.θ_res), N) # [%]
   ψ_sat = _fit_layers(FT, p.ψ_sat, N)    # [m], positive suction at saturation (Campbell 1974 convention)
 
   SOIL_THERMAL_DENSITY = [1300.0, 1500.0, 1517.0, 1517.0, 1517.0] # [kg m-3]
@@ -68,7 +68,7 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   V_SOM = _fit_layers(FT, SOIL_ORGANIC_MATTER, N)   # [volume fraction], 0-1
 
   dz = _default_dz(FT, N)
-  profile = BEPSCampbellLayers{FT,N}(; θ_vwp, θ_sat, Ksat=K_sat, ψ_sat, b)
+  profile = CampbellLayers{FT,N}(; θ_res, θ_sat, Ksat=K_sat, ψ_sat, b)
   kv = KvLayers{FT,N}(; kv=K_sat)
   hydraulic = HydraulicProfile{FT,N}(profile, kv, FT.(100 .* dz))
   thermal = ThermalProfile{FT,N}(ThermalBaseLayers{FT,N}(; κ_dry, ρ_soil, V_SOM))

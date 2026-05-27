@@ -5,7 +5,7 @@ Initialize soil parameters
 
 - `K_sat`         : saturated hydraulic conductivity
 - `porosity`     : porosity
-- `θ_vwp`        : wilt point
+- `θ_res`        : wilt point
 - `ψ_sat`        : water potential at saturate
 - `κ_dry`        : thermal conductivity
 """
@@ -39,7 +39,7 @@ function Init_Soil_Parameters(soil::Soil, VegType::Integer, SoilType::Integer, r
   soil.K_sat[1:5] .= par.K_sat
   soil.θ_sat[1:5] .= fill(par.θ_sat, 5)
   # soil.θ_vfc[1:5] .= fill(par.θ_vfc, 5)
-  soil.θ_vwp[1:5] .= fill(par.θ_vwp, 5)
+  soil.θ_res[1:5] .= fill(par.θ_res, 5)
   soil.κ_dry[1:5] .= fill(par.κ_dry, 5)
   soil.ψ_sat[1:5] .= par.ψ_sat
   return soil

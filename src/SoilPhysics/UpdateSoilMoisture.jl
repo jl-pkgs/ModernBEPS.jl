@@ -58,7 +58,7 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
-  (; θ_sat, K_sat, ψ_sat, b, θ_vwp) = get_hydraulic(ps)
+  (; θ_sat, K_sat, ψ_sat, b, θ_res) = get_hydraulic(ps)
   (; dz, f_water, Kavg, Kmid, ψ, θ, ETi, r_waterflow) = st
 
   total_t, max_Fb = 0.0, 0.0
@@ -99,7 +99,7 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
       else
         θ[i] += (r_waterflow[i-1] - r_waterflow[i] - ETi[i]) * Δt / dz[i]
       end
-      θ[i] = clamp(θ[i], θ_vwp[i], θ_sat[i])
+      θ[i] = clamp(θ[i], θ_res[i], θ_sat[i])
     end
   end
 end

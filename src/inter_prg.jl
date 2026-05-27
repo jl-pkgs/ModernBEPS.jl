@@ -28,7 +28,7 @@ function inter_prg_jl(jday::Int, hour::Int, lon::T, lat::T,
   (; α_canopy_vis, α_canopy_nir,
     α_soil_sat, α_soil_dry, z_canopy_o, z_canopy_u, z_wind,
     g0_w, g1_w, VCmax25, N_leaf, slope_Vc) = ps.veg
-  θ_vwp = ps.hydraulic.θ_vwp
+  θ_res = ps.hydraulic.θ_res
   θ_sat = ps.hydraulic.θ_sat
 
   Vcmax_sunlit, Vcmax_shaded = VCmax(lai, Ω, CosZs, VCmax25, N_leaf, slope_Vc)
@@ -95,10 +95,10 @@ function inter_prg_jl(jday::Int, hour::Int, lon::T, lat::T,
     r_rain_g = rainfall_stage1_jl(Tair, precip, frac_water, m_water, m_water_pre, lai_o, lai_u, Ω; kstep)
 
     # 土壤反照率计算 [-]
-    α_g = if state.θ_prev[2] < θ_vwp[2] * 0.5
+    α_g = if state.θ_prev[2] < θ_res[2] * 0.5
       α_soil_dry
     else
-      (state.θ_prev[2] - θ_vwp[2] * 0.5) / (θ_sat[2] - θ_vwp[2] * 0.5) *
+      (state.θ_prev[2] - θ_res[2] * 0.5) / (θ_sat[2] - θ_res[2] * 0.5) *
       (α_soil_sat - α_soil_dry) + α_soil_dry
     end
     α_v.g = 2.0 / 3.0 * α_g

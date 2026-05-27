@@ -11,31 +11,6 @@ _fit_layers(::Type{FT}, values, N::Int) where {FT<:AbstractFloat} = begin
   length(xs) >= N ? xs[1:N] : [xs; fill(last(xs), N - length(xs))]
 end
 
-@bounds @with_kw mutable struct BEPSCampbell{FT<:Real} <: AbstractRetention{FT}
-  θ_vwp::FT = FT(0.10) | (0.02, 0.30)
-  θ_sat::FT = FT(0.45) | (0.25, 0.70)
-  Ksat::FT = FT(5.0) | nothing
-  ψ_sat::FT = FT(0.5) | (0.01, 2.0)
-  b::FT = FT(5.0) | (1.5, 15.0)
-end
-
-const BEPSCampbellLayers{FT,N} = MultiLayer{FT,N,BEPSCampbell{FT}}
-
-_layer_vector(::Type{FT}, value::AbstractVector, N::Int) where {FT<:AbstractFloat} = _fit_layers(FT, value, N)
-_layer_vector(::Type{FT}, value::Number, N::Int) where {FT<:AbstractFloat} = fill(FT(value), N)
-
-function BEPSCampbellLayers{FT,N}(; θ_vwp=FT(0.10), θ_sat=FT(0.45),
-  Ksat=FT(5.0), ψ_sat=FT(0.5), b=FT(5.0)) where {FT<:AbstractFloat,N}
-
-  data = (;
-    θ_vwp = _layer_vector(FT, θ_vwp, N),
-    θ_sat = _layer_vector(FT, θ_sat, N),
-    Ksat  = _layer_vector(FT, Ksat, N),
-    ψ_sat = _layer_vector(FT, ψ_sat, N),
-    b     = _layer_vector(FT, b, N)
-  )
-  MultiLayer{FT,N,BEPSCampbell{FT},typeof(data)}(data)
-end
 
 function Base.getproperty(x::HydraulicProfile, name::Symbol)
   name in (:profile, :layers, :kv, :dz_cm) && return getfield(x, name)
@@ -80,7 +55,7 @@ end
 
 function ParamBEPS{FT,N}(; dz=_default_dz(FT, N), kwargs...) where {FT<:AbstractFloat,N}
   dz = FT.(collect(dz))
-  hydraulic = HydraulicProfile{FT,N}(BEPSCampbellLayers{FT,N}(), KvLayers{FT,N}(), FT.(100 .* dz))
+  hydraulic = HydraulicProfile{FT,N}(CampbellLayers{FT,N}(), KvLayers{FT,N}(), FT.(100 .* dz))
   thermal = ThermalProfile{FT,N}(ThermalBaseLayers{FT,N}())
   ParamBEPS{FT,N}(hydraulic, thermal; dz, kwargs...)
 end
@@ -154,7 +129,7 @@ function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
   soil.alpha = Cdouble(params.alpha)
 
   # soil.θ_vfc[1:N] .= Cdouble.(hydraulic.θ_vfc)
-  soil.θ_vwp[1:N] .= Cdouble.(hydraulic.θ_vwp)
+  soil.θ_res[1:N] .= Cdouble.(hydraulic.θ_res)
   soil.θ_sat[1:N] .= Cdouble.(hydraulic.θ_sat)
   soil.K_sat[1:N] .= Cdouble.(hydraulic.K_sat)
   soil.ψ_sat[1:N] .= Cdouble.(hydraulic.ψ_sat)
@@ -183,7 +158,7 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
 
   (; hydraulic, thermal) = params
 
-  hydraulic.profile.θ_vwp .= FT.(soil.θ_vwp[1:N])
+  hydraulic.profile.θ_res .= FT.(soil.θ_res[1:N])
   hydraulic.profile.θ_sat .= FT.(soil.θ_sat[1:N])
   hydraulic.profile.Ksat .= FT.(soil.K_sat[1:N])
   hydraulic.kv.kv .= FT.(soil.K_sat[1:N])

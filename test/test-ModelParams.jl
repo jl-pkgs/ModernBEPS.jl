@@ -18,5 +18,5 @@ using BEPS, Test
 
   p_hydraulic = filter_params(model, :hydraulic)
   @test all(path -> path[1] === :hydraulic, p_hydraulic.path)
-  @test size(p_hydraulic, 1) == 25
+  @test size(p_hydraulic, 1) == 20
 end

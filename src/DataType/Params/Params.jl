@@ -1,6 +1,6 @@
 export ParamVeg
 export ParamSoilHydraulic, ParamSoilThermal, ParamSoil
-export ParamBEPS, BEPSCampbell, BEPSCampbellLayers
+export ParamBEPS
 export get_params, parameters, update!, get_opt_info
 export filter_params, update_params!
 
@@ -8,6 +8,7 @@ export filter_params, update_params!
 using Parameters, DataFrames
 import ModelParams: @metadata, @units, units, @bounds, bounds, split_bounds
 import ModelParams: AbstractSoilModel, AbstractRetention, MultiLayer
+import ModelParams: Campbell, CampbellLayers
 import ModelParams: HydraulicProfile, ThermalProfile, ThermalBaseLayers, KvLayers
 import ModelParams: get_params, parameters, update!, get_opt_info
 import ModelParams: filter_params, update_params!
@@ -49,7 +50,7 @@ end
 # 水力参数
 @bounds @with_kw mutable struct ParamSoilHydraulic{FT<:AbstractFloat}
   θ_vfc::FT = FT(0.30) | (0.10, 0.45)   # volumetric field capacity [-]
-  θ_vwp::FT = FT(0.10) | (0.02, 0.30)   # volumetric wilting point [-]
+  θ_res::FT = FT(0.10) | (0.02, 0.30)   # volumetric wilting point [-]
 
   θ_sat::FT = FT(0.45) | (0.25, 0.70)   # volumetric saturation [-]
   K_sat::FT = FT(5.0) | (0.01, 50.0)   # saturated hydraulic conductivity [cm h-1]

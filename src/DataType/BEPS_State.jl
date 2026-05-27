@@ -51,7 +51,7 @@ abstract type AbstractSoil end
 
   κ_dry       ::Vector{Float64} = zeros(10) # ? thermal conductivity
   θ_vfc       ::Vector{Float64} = zeros(10) # ? volumetric field capacity
-  θ_vwp       ::Vector{Float64} = zeros(10) # ? volumetric wilting point
+  θ_res       ::Vector{Float64} = zeros(10) # ? volumetric wilting point
   θ_sat       ::Vector{Float64} = zeros(10) # ? volumetric saturation
   K_sat       ::Vector{Float64} = zeros(10) # ? saturated hydraulic conductivity
   ψ_sat       ::Vector{Float64} = zeros(10) # ? soil matric potential at saturation
