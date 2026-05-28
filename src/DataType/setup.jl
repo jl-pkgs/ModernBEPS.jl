@@ -5,9 +5,21 @@ export setup
 
 ## Internal Helpers ============================================================
 # 从 ParamBEPS 初始化 StateBEPS
+function _calc_Δz₊ₕ_cm(dz_cm::AbstractVector, N::Int)
+  Δz₊ₕ = zeros(10)
+  for i in 1:N-1
+    Δz₊ₕ[i] = 0.5 * (dz_cm[i] + dz_cm[i+1])
+  end
+  N > 0 && (Δz₊ₕ[N] = 0.5 * dz_cm[N])
+  Δz₊ₕ
+end
+
 function _init_state(ps::ParamBEPS, Tsoil, Ta, θ0, z_snow)
-  st = StateBEPS(; n_layer=Cint(ps.N))
-  st.dz[1:ps.N] .= ps.dz
+  N = ps.N
+  st = StateBEPS(; n_layer=Cint(N), N)
+  st.dz[1:N] .= ps.dz
+  st.Δz_cm[1:N] .= ps.hydraulic.dz_cm[1:N]
+  st.Δz₊ₕ_cm   .= _calc_Δz₊ₕ_cm(ps.hydraulic.dz_cm, N)
   UpdateRootFraction!(st, ps)
   Init_Soil_T_θ!(st, Float64(Tsoil), Float64(Ta), Float64(θ0), Float64(z_snow))
   st.Tsnow_c .= Float64(Ta)

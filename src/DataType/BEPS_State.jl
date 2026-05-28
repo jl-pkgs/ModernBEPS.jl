@@ -22,7 +22,7 @@ end
 clamp!(land::SnowLand{FT}, Tair::FT) where {FT<:AbstractFloat} = clamp!(land, land, Tair)
 
 
-abstract type AbstractSoil end
+import ModelParams: AbstractSoil
 
 # ?     : 需要优化的参数
 # state : 状态变量
@@ -89,10 +89,16 @@ end
 # state, params = setup(model)
 # st = StateBEPS, ps = ParamBEPS
 
+# (; N, ibeg,
+#   θ, ψ, θ_prev, ψ_prev, ψ_next,
+#   ∂θ∂ψ, K, K₊ₕ,
+#   a, b, c, d, e, f) = soil
+
 # 拖着`ρ_snow`，`ρ_snow`也是一个状态连续的变量
 # https://www.eoas.ubc.ca/courses/atsc113/snow/met_concepts/07-met_concepts/07b-newly-fallen-snow-density/
 @with_kw mutable struct StateBEPS <: AbstractSoil
   n_layer    ::Cint = Cint(5) # 土壤层数
+  N          ::Int  = 5       # Bonan-Q0 算法所需，与 n_layer 保持同值
   dz         ::Vector{Float64} = zeros(10) # 土壤厚度（从 ps 复制，方便计算）
 
   Tsnow_c::SnowLand{FT} = SnowLand{FT}() # [inter_prg], 4:8
@@ -122,8 +128,8 @@ end
   f_water    ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
   ψ          ::Vector{Float64} = zeros(10) # [state], soil matric potential
   r_waterflow::Vector{Float64} = zeros(10) # [state], vertical water flow rate
-  Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point
-  Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers
+  Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point (旧求解器)
+  Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers (旧求解器)
   Cv         ::Vector{Float64} = zeros(10) # [state], volume heat capacity
   κ          ::Vector{Float64} = zeros(10) # [state]
   ETi        ::Vector{Float64} = zeros(10) # [state], 每层蒸发量ET in each layer
@@ -134,6 +140,27 @@ end
   w_root     ::Vector{Float64} = zeros(10) # [state], 叠加根系分布比例，f_root[i] * f_stress[i]
   w_norm     ::Vector{Float64} = zeros(10) # [state], 每层的土壤水限制因子，已归一化
   f_stress   ::Vector{Float64} = zeros(10) # [state], f_{w,i}, He et al., 2017, Eq. 3
+
+  # ─── Bonan-Q0 求解器字段 ───────────────────────────────────────────────────
+  ibeg     ::Int    = 1         # BEPS 固定从第1层开始
+  dt       ::Float64 = 3600.0  # [s] 时间步长（小时）
+
+  Δz_cm    ::Vector{Float64} = zeros(10)  # [cm] 各层厚度，setup 时从 dz*100 填充
+  Δz₊ₕ_cm  ::Vector{Float64} = zeros(10)  # [cm] 层心间距，setup 时计算
+
+  ψ_prev   ::Vector{Float64} = zeros(10)  # [cm] 上一半步 ψ
+  ψ_next   ::Vector{Float64} = zeros(10)  # [cm] 下一半步 ψ
+  ∂θ∂ψ    ::Vector{Float64} = zeros(10)  # [cm⁻¹] specific moisture capacity
+  K        ::Vector{Float64} = zeros(10)  # [cm h⁻¹] 层中心水力传导率
+  K₊ₕ     ::Vector{Float64} = zeros(10)  # [cm h⁻¹] 层界面水力传导率
+
+  # 三对角矩阵求解临时量
+  a ::Vector{Float64} = zeros(10)
+  b ::Vector{Float64} = zeros(10)
+  c ::Vector{Float64} = zeros(10)
+  d ::Vector{Float64} = zeros(10)
+  e ::Vector{Float64} = zeros(10)
+  f ::Vector{Float64} = zeros(10)
 end
 
 
@@ -144,7 +171,8 @@ const VARS_SCALAR = Tuple(
 
 const VARS_VECTOR = Tuple(
     f for (f, T) in zip(fieldnames(StateBEPS), fieldtypes(StateBEPS))
-    if T == Vector{Float64} && f ∉ (:dz, :f_root)
+    if T == Vector{Float64} && f ∉ (:dz, :f_root, :Δz_cm, :Δz₊ₕ_cm,
+                                    :ψ_prev, :ψ_next, :∂θ∂ψ, :a, :b, :c, :d, :e, :f)
 )
 # :θ_prev, :Tsoil_p
 const ALL_VARS_STATE = (VARS_SCALAR..., VARS_VECTOR...)
@@ -156,8 +184,8 @@ function StateBEPS(soil::Soil)
           f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
           f_temp, w_root, f_stress = soil
 
-  StateBEPS(; 
-    n_layer, dz, z_water, z_snow, 
+  StateBEPS(;
+    n_layer, N=Int(n_layer), dz, z_water, z_snow,
     r_rain_g, f_soilwater,
     f_root, w_norm, ice_ratio, θ, θ_prev,
     Tsoil_p, Tsoil_c, f_water, ψ,
@@ -181,5 +209,27 @@ function State2Soil!(soil::Soil, st::StateBEPS)
 end
 
 
-export Soil, StateBEPS, State2Soil!
+# state_hydraulic: 统一 AbstractSoil dispatch 的锚点函数
+# StateBEPS 的 Δz 字段名为 dz，通过 NamedTuple 映射为算法所需的 Δz（单位不影响比值计算）
+@inline function state_hydraulic(st::StateBEPS)
+  (;
+    N    = st.N,
+    ibeg = st.ibeg,
+    dt   = st.dt,
+    Δz   = st.dz,          # cal_K! 需要 Δz，dz[m] 与 Δz_cm[cm] 比值等价
+    Δz_cm   = st.Δz_cm,
+    Δz₊ₕ_cm = st.Δz₊ₕ_cm,
+    θ = st.θ, ψ = st.ψ,
+    θ_prev = st.θ_prev,
+    ψ_prev = st.ψ_prev,
+    ψ_next = st.ψ_next,
+    K   = st.K,
+    K₊ₕ = st.K₊ₕ,
+    ∂θ∂ψ = st.∂θ∂ψ,
+    a = st.a, b = st.b, c = st.c,
+    d = st.d, e = st.e, f = st.f,
+  )
+end
+
+export Soil, StateBEPS, State2Soil!, state_hydraulic
 export VARS_SCALAR, VARS_VECTOR, ALL_VARS_STATE
