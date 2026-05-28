@@ -13,10 +13,10 @@ function Init_Soil_Parameters(soil::Soil, VegType::Integer, SoilType::Integer, r
   soil.n_layer = 5
 
   if VegType == 6 || VegType == 9 # DBF or EBF, low constaint threshold
-    soil.ψ_min = 10.0 # ψ_min
+    soil.ψ_min = 1000.0 # [cm]
     soil.alpha = 1.5
   else
-    soil.ψ_min = 33.0 # ψ_min
+    soil.ψ_min = 3300.0 # [cm]
     soil.alpha = 0.4
   end
 
@@ -41,7 +41,7 @@ function Init_Soil_Parameters(soil::Soil, VegType::Integer, SoilType::Integer, r
   # soil.θ_vfc[1:5] .= fill(par.θ_vfc, 5)
   soil.θ_res[1:5] .= fill(par.θ_res, 5)
   soil.κ_dry[1:5] .= fill(par.κ_dry, 5)
-  soil.ψ_sat[1:5] .= par.ψ_sat
+  soil.ψ_sat[1:5] .= -100.0 .* par.ψ_sat # SOIL_PARAMS ψ_sat positive is [m] -> negative [cm]
   return soil
 end
 

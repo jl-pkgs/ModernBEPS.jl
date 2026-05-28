@@ -25,10 +25,11 @@ function cal_infiltration(θ::V, dz::V,
   K_sat::V, θ_sat::V, ψ_sat::V, b::V,
   frac_water::T, z_water::T, r_rain_g::T, kstep::T) where {T<:AbstractFloat,V<:AbstractVector{T}}
 
-  _Ksat = K_sat[1] / 360000.0 # [cm h-1] -> [m s-1]
-  # K_sat * (1 + (θ_sat - θ_prev) / dz * ψ_sat / θ_sat * b)
-  inf_max = frac_water * _Ksat * (1 + (θ_sat[1] - θ[1]) / dz[1] * ψ_sat[1] * b[1] / θ_sat[1])
-  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0)
+  # pdv(psi, z) = [(psi_0 + z_0) - (psi_1 + z_1)] / [z_0 - z_1] = 1 + (psi_0 - psi_1) / Δz
+  dψ_cm = -(θ_sat[1] - θ[1]) * ψ_sat[1] * b[1] / θ_sat[1]
+  dz_cm = dz[1] * 100.0
+  inf_max = frac_water * K_sat[1] * (1 + dψ_cm / dz_cm) / 360000.0    # [cm h-1] -> [m s-1]
+  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0)          # [m s-1]
   clamp(inf_wa, 0, inf_max)
 end
 
@@ -43,13 +44,12 @@ function update_surface_water!(st::S, ps::P, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
-  (; θ_sat, K_sat, b) = get_hydraulic(ps)
-  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
+  (; θ_sat, K_sat, b, ψ_sat) = get_hydraulic(ps)
   (; θ, f_water, Tsoil_c, dz, z_water, r_rain_g) = st
   r_drainage = ps.r_drainage
 
   update_SoilWaterFrac!(f_water, Tsoil_c; n)
-  inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat_m, b, f_water[1], z_water, r_rain_g, kstep)
+  inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat, b, f_water[1], z_water, r_rain_g, kstep)
   st.z_water = (z_water / kstep + r_rain_g - inf) * kstep * r_drainage # Ponded water after runoff
   inf
 end
@@ -59,8 +59,7 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
-  (; θ_sat, K_sat, b, θ_res) = get_hydraulic(ps)
-  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
+  (; θ_sat, K_sat, ψ_sat, b, θ_res) = get_hydraulic(ps)
   (; dz, f_water, Kavg, Kmid, ψ, θ, ETi, r_waterflow) = st
 
   total_t, max_Fb = 0.0, 0.0
@@ -69,8 +68,8 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
     # the unsaturated soil water retention. LHe
     # Hydraulic conductivity: Bonan, Table 8.2, Campbell 1974, K = K_sat*(θ/θ_sat)^(2b+3)
     for i in 1:n
-      ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat_m[i], b[i])
-      Kmid[i] = f_water[i] * cal_K(θ[i], θ_sat[i], K_sat[i] / 360000.0, b[i]) # Hydraulic conductivity, [m/s]
+      ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat[i], b[i])
+      Kmid[i] = f_water[i] * cal_K(θ[i], θ_sat[i], K_sat[i], b[i]) # Hydraulic conductivity, [cm/h]
     end
 
     # Fb, flow speed. Dancy's law. LHE.
@@ -80,7 +79,11 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
       # K * ψ * b / (b + 3): ?
       # the unsaturated hydraulic conductivity of soil layer
       Kavg[i] = (Kmid[i] * ψ[i] + Kmid[i+1] * ψ[i+1]) / (ψ[i] + ψ[i+1]) * (b[i] + b[i+1]) / (b[i] + b[i+1] + 6) # 计算平均的一种方案？
-      Q = Kavg[i] * (2 * (ψ[i+1] - ψ[i]) / (dz[i] + dz[i+1]) + 1) # z direction
+      # [(ψ[i] + z_i) - (ψ[i+1] + z_i+1)] / (z_i - z_i+1) = 1 - (ψ[i+1] - ψ[i]) / Δz
+      _Δz_cm = (dz[i] + dz[i+1])/2 * 100.0
+      grad_ψ = 1 - (ψ[i+1] - ψ[i]) / _Δz_cm
+      Q = Kavg[i] * grad_ψ / 360000.0 # [cm h-1] -> [m s-1]
+
       # `Q_max`出现了单位不匹配的问题，导致Q_max未发挥作用
       Q_max = (θ_sat[i+1] - θ[i+1]) * dz[i+1] / kstep + ETi[i+1]
       Q = min(Q, Q_max)
@@ -134,8 +137,8 @@ end
 
 # Campbell 1974, Bonan 2019 Table 8.2
 @fastmath function cal_ψ(θ::T, θ_sat::T, ψ_sat::T, b::T) where {T<:Real}
-  ψ = ψ_sat * (θ / θ_sat)^(-b)
-  max(ψ, ψ_sat)
+  ψ_cm = ψ_sat * (θ / θ_sat)^(-b)
+  min(ψ_cm, ψ_sat) # both inputs are in [cm] and negative
 end
 
 @fastmath cal_K(θ::T, θ_sat::T, K_sat::T, b::T) where {T<:Real} =

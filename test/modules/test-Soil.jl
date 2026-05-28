@@ -25,6 +25,14 @@ function is_soil_equal(p_jl, p_c; tol=1e-7, verbose=false)
     if name_jl == :K_sat
       # C version uses m/s, Julia uses cm/h
       x_jl = x_jl ./ 360000.0
+    elseif name_jl in (:Kmid, :Kavg)
+      x_jl = x_jl ./ 360000.0
+    elseif name_jl == :ψ
+      x_jl = .-x_jl ./ 100.0
+    elseif name_jl == :ψ_sat
+      x_jl = .-x_jl ./ 100.0
+    elseif name_jl == :ψ_min
+      x_jl = x_jl ./ 100.0
     end
 
     if verbose
@@ -190,6 +198,9 @@ end
   @test st.z_water ≈ soil.z_water
   @test st.r_waterflow[1:5] ≈ soil.r_waterflow[1:5]
   @test st.ψ[1:5] ≈ soil.ψ[1:5]
+  @test all(st.ψ[1:5] .<= 0.0)
+  @test all(st.Kmid[1:5] .>= 0.0)
+  @test all(st.Kavg[1:4] .>= 0.0)
 
   # 测试 Root_Water_Uptake
   Root_Water_Uptake(soil, 1.0, 2.0, 0.5)
@@ -237,7 +248,7 @@ end
   
   # Modify soil parameters
   soil.r_drainage = 0.99
-  soil.ψ_min = 99.0
+  soil.ψ_min = 9900.0
   soil.alpha = 9.9
   # soil.θ_vfc[1] = 0.88
   soil.K_sat[1] = 0.77
@@ -246,7 +257,7 @@ end
   Soil2Params!(ps, soil)
   
   @test ps.r_drainage ≈ 0.99
-  @test ps.ψ_min ≈ 99.0
+  @test ps.ψ_min ≈ 9900.0
   @test ps.alpha ≈ 9.9
   # @test ps.hydraulic.θ_vfc[1] ≈ 0.88
   @test ps.hydraulic.K_sat[1] ≈ 0.77

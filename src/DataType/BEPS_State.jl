@@ -41,7 +41,7 @@ import ModelParams: AbstractSoil
   soil_r      ::Cdouble = Cdouble(0)        # // not used, soil surface resistance for water
   r_drainage  ::Cdouble = Cdouble(0)        # ? 地表排水速率（地表汇流）
   r_root_decay::Cdouble = Cdouble(0)        # ? 根系分布衰减率, decay_rate_of_root_distribution
-  ψ_min       ::Cdouble = Cdouble(0)        # ? 开始胁迫，33[m] = 0.33[MPa]
+  ψ_min       ::Cdouble = Cdouble(0)        # ? 开始胁迫，33[m] = 0.33[MPa]；现按 [cm] 存储
   alpha       ::Cdouble = Cdouble(0)        # ? 土壤水限制因子参数，He 2017 JGR-B, Eq. 4
   f_soilwater ::Cdouble = Cdouble(0)        # [state], 总体的土壤水限制因子
 
@@ -54,7 +54,7 @@ import ModelParams: AbstractSoil
   θ_res       ::Vector{Float64} = zeros(10) # ? volumetric wilting point
   θ_sat       ::Vector{Float64} = zeros(10) # ? volumetric saturation
   K_sat       ::Vector{Float64} = zeros(10) # ? saturated hydraulic conductivity
-  ψ_sat       ::Vector{Float64} = zeros(10) # ? soil matric potential at saturation
+  ψ_sat       ::Vector{Float64} = zeros(10) # ? soil matric potential at saturation，现按 [negative cm] 存储
   b           ::Vector{Float64} = zeros(10) # ? Cambell parameter b
   ρ_soil      ::Vector{Float64} = zeros(10) # ? 土壤容重，soil density, for volume heat capacity
   V_SOM       ::Vector{Float64} = zeros(10) # ? 有机质含量，organic matter, for volume heat capacity
@@ -66,13 +66,13 @@ import ModelParams: AbstractSoil
   Tsoil_c     ::Vector{Float64} = zeros(10) # [state], soil temperature in current time
 
   f_water     ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
-  ψ           ::Vector{Float64} = zeros(10) # [state], soil matric potential
+  ψ           ::Vector{Float64} = zeros(10) # [state], soil matric potential，现按 [negative cm] 存储
   θb          ::Vector{Float64} = zeros(10) # // not used, θ at the bottom of each layer
   ψb          ::Vector{Float64} = zeros(10) # // not used
   r_waterflow ::Vector{Float64} = zeros(10) # [state], vertical water flow rate
-  Kmid        ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point
+  Kmid        ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point，现按 [cm h-1] 存储
   Kb          ::Vector{Float64} = zeros(10) # // not used
-  Kavg        ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers
+  Kavg        ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers，现按 [cm h-1] 存储
   Cv          ::Vector{Float64} = zeros(10) # [state], volume heat capacity
   κ           ::Vector{Float64} = zeros(10) # [state]
   ETi         ::Vector{Float64} = zeros(10) # [state], 每层蒸发量ET in each layer
@@ -126,10 +126,10 @@ end
   Tsoil_c    ::Vector{Float64} = zeros(10) # [state], soil temperature in current time
 
   f_water    ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
-  ψ          ::Vector{Float64} = zeros(10) # [state], soil matric potential
+  ψ          ::Vector{Float64} = zeros(10) # [state], soil matric potential，现按 [negative cm] 存储
   r_waterflow::Vector{Float64} = zeros(10) # [state], vertical water flow rate
-  Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point (旧求解器)
-  Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers (旧求解器)
+  Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point (旧求解器)，现按 [cm h-1] 存储
+  Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers (旧求解器)，现按 [cm h-1] 存储
   Cv         ::Vector{Float64} = zeros(10) # [state], volume heat capacity
   κ          ::Vector{Float64} = zeros(10) # [state]
   ETi        ::Vector{Float64} = zeros(10) # [state], 每层蒸发量ET in each layer

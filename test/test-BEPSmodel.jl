@@ -15,7 +15,7 @@ using BEPS, Test
     @test model.veg.g1_w ≈ 8.0
 
     # Test water potential parameters (non-DBF/EBF should have higher ψ_min)
-    @test model.ψ_min ≈ 33.0
+    @test model.ψ_min ≈ 3300.0
     @test model.alpha ≈ 0.4
 
     # Test drainage and root decay
@@ -42,7 +42,7 @@ using BEPS, Test
     @test model.veg.N_leaf ≈ 1.74 + 0.71
 
     # Test water potential parameters (DBF should have lower ψ_min)
-    @test model.ψ_min ≈ 10.0
+    @test model.ψ_min ≈ 1000.0
     @test model.alpha ≈ 1.5
 
     # Test soil hydraulic parameters (sandy loam)
@@ -62,7 +62,7 @@ using BEPS, Test
     @test model.veg.VCmax25 ≈ 29.0
 
     # Test water potential parameters (EBF should have lower ψ_min like DBF)
-    @test model.ψ_min ≈ 10.0
+    @test model.ψ_min ≈ 1000.0
     @test model.alpha ≈ 1.5
 
     # Test soil hydraulic parameters (clay)
@@ -150,11 +150,11 @@ end
       @test length(hydraulic.θ_sat) == 5
       @test length(thermal.κ_dry) == 5
 
-      # All values should be positive (except ψ_sat which is negative)
+      # All values should be positive (except ψ_sat which is negative cm)
       @test all(hydraulic.θ_sat .> 0)
       @test all(hydraulic.θ_res .> 0)
       @test all(hydraulic.K_sat .> 0)
-      @test all(hydraulic.ψ_sat .> 0)
+      @test all(hydraulic.ψ_sat .< 0)
       @test all(hydraulic.b .> 0)
       @test all(thermal.κ_dry .> 0)
       @test all(thermal.ρ_soil .> 0)

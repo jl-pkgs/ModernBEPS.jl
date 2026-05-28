@@ -1,8 +1,7 @@
 # Function to compute soil water stress factor
 function soil_water_factor_v2(st::S, ps::P) where {S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
   (; ψ_min, alpha) = ps
-  (; θ_sat, b) = get_hydraulic(ps)
-  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
+  (; θ_sat, ψ_sat, b) = get_hydraulic(ps)
 
   θ = st.θ
   n = st.n_layer
@@ -10,15 +9,16 @@ function soil_water_factor_v2(st::S, ps::P) where {S<:Union{StateBEPS,Soil},P<:U
   t1 = -0.02
   t2 = 2.0
 
-  if st.ψ[1] <= 0.000001
+  if abs(st.ψ[1]) <= 0.000001
     for i in 1:n
-      st.ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat_m[i], b[i])
+      st.ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat[i], b[i])
     end
   end
 
   for i in 1:n
     # psi_sr in m H2O! He 2017 JGR-B, Eq. 4
-    st.f_stress[i] = st.ψ[i] > ψ_min ? 1.0 / (1 + ((st.ψ[i] - ψ_min) / ψ_min)^alpha) : 1.0
+    ψ_cm = -st.ψ[i]
+    st.f_stress[i] = ψ_cm > ψ_min ? 1.0 / (1 + ((ψ_cm - ψ_min) / ψ_min)^alpha) : 1.0
     st.f_temp[i] = st.Tsoil_p[i] > 0.0 ? 1.0 - exp(t1 * st.Tsoil_p[i]^t2) : 0
 
     st.f_stress[i] *= st.f_temp[i]

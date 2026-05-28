@@ -12,7 +12,7 @@ end
   dz::Vector{FT} = _default_dz(FT, N)
   r_drainage::FT = FT(0.50) | (0.2, 0.7)
 
-  ψ_min::FT = FT(33.0)
+  ψ_min::FT = FT(3300.0)
   alpha::FT = FT(0.4)
 
   hydraulic::H
@@ -45,7 +45,7 @@ function ParamBEPS(VegType::Union{AbstractString,Integer}, SoilType::Union{Abstr
   veg = InitParam_Veg(VegType; FT)
   hydraulic, thermal = InitParam_Soil(SoilType, N, FT)
 
-  ψ_min = veg.is_bforest ? FT(10.0) : FT(33.0) # 开始胁迫点
+  ψ_min = veg.is_bforest ? FT(1000.0) : FT(3300.0) # 开始胁迫点 [cm]
   alpha = veg.is_bforest ? FT(1.5) : FT(0.4)   # 土壤水限制因子参数，He 2017 JGR-B, Eq. 4
 
   ParamBEPS{FT,N}(hydraulic, thermal;
@@ -118,7 +118,7 @@ end
 
 # DBF or EBF, low constaint threshold
 function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
-  soil.ψ_min = BF ? 10.0 : 33.0 # [m], about 0.10~0.33 MPa开始胁迫点
+  soil.ψ_min = BF ? 1000.0 : 3300.0 # about 0.10~0.33 MPa开始胁迫点 [cm]
   soil.alpha = BF ? 1.5 : 0.4   # He 2017 JGR-B, Eq. 4
 
   (; hydraulic, thermal, N) = params
@@ -137,8 +137,8 @@ function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
   soil.θ_sat[1:N] .= Cdouble.(hydraulic.θ_sat)
   soil.K_sat[1:N] .= Cdouble.(hydraulic.K_sat)
   # hydraulic.ψ_sat is in negative cm (ModelParams convention);
-  # Soil.ψ_sat expects positive m (BEPS/Campbell 1974 convention).
-  soil.ψ_sat[1:N] .= Cdouble.(-hydraulic.ψ_sat ./ 100.0)
+  # Soil.ψ_sat now also uses negative cm.
+  soil.ψ_sat[1:N] .= Cdouble.(hydraulic.ψ_sat)
   soil.b[1:N] .= Cdouble.(hydraulic.b)
 
   soil.κ_dry[1:N] .= Cdouble.(thermal.κ_dry)
@@ -168,9 +168,9 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
   hydraulic.profile.θ_sat .= FT.(soil.θ_sat[1:N])
   hydraulic.profile.Ksat .= FT.(soil.K_sat[1:N])
   hydraulic.kv.kv .= FT.(soil.K_sat[1:N])
-  # Soil.ψ_sat is in positive m (BEPS convention);
-  # hydraulic.profile.ψ_sat expects negative cm (ModelParams convention).
-  hydraulic.profile.ψ_sat .= FT.(-soil.ψ_sat[1:N] .* 100.0)
+  # Soil.ψ_sat is in negative cm;
+  # hydraulic.profile.ψ_sat also expects negative cm.
+  hydraulic.profile.ψ_sat .= FT.(soil.ψ_sat[1:N])
   hydraulic.profile.b .= FT.(soil.b[1:N])
   hydraulic.dz_cm .= FT.(100 .* params.dz)
 
