@@ -6,23 +6,6 @@ function _default_dz(::Type{FT}, N::Int) where {FT<:AbstractFloat}
   return [collect(base); fill(last(base), N - length(base))]
 end
 
-_fit_layers(::Type{FT}, values, N::Int) where {FT<:AbstractFloat} = begin
-  xs = FT.(collect(values))
-  length(xs) >= N ? xs[1:N] : [xs; fill(last(xs), N - length(xs))]
-end
-
-
-function Base.getproperty(x::HydraulicProfile, name::Symbol)
-  name in (:profile, :layers, :kv, :dz_cm) && return getfield(x, name)
-  profile = getfield(x, :profile)
-  name === :K_sat && return getproperty(profile, :Ksat)
-  return getproperty(profile, name)
-end
-
-function Base.getproperty(x::ThermalProfile, name::Symbol)
-  name in (:profile, :layers) && return getfield(x, name)
-  return getproperty(getfield(x, :profile), name)
-end
 
 @bounds @with_kw_noshow mutable struct ParamBEPS{FT<:AbstractFloat,N,
   H<:HydraulicProfile{FT,N},T<:ThermalProfile{FT,N}} <: AbstractSoilModel{FT,N}
@@ -37,13 +20,6 @@ end
   veg::ParamVeg{FT} = ParamVeg{FT}()
 end
 
-nlayer(::ParamBEPS{FT,N}) where {FT,N} = N
-
-function Base.getproperty(x::ParamBEPS, name::Symbol)
-  name === :N && return nlayer(x)
-  name === :r_root_decay && return getfield(x, :veg).r_root_decay
-  return getfield(x, name)
-end
 
 function ParamBEPS{FT,N}(hydraulic::H, thermal::T; dz=_default_dz(FT, N), kwargs...) where {
   FT<:AbstractFloat,N,H<:HydraulicProfile{FT,N},T<:ThermalProfile{FT,N}}
@@ -76,6 +52,34 @@ function ParamBEPS(VegType::Union{AbstractString,Integer}, SoilType::Union{Abstr
     kw..., ψ_min, alpha, veg
   )
 end
+
+nlayer(::ParamBEPS{FT,N}) where {FT,N} = N
+
+function Base.getproperty(x::ParamBEPS, name::Symbol)
+  name === :N && return nlayer(x)
+  name === :r_root_decay && return getfield(x, :veg).r_root_decay
+  return getfield(x, name)
+end
+
+
+_fit_layers(::Type{FT}, values, N::Int) where {FT<:AbstractFloat} = begin
+  xs = FT.(collect(values))
+  length(xs) >= N ? xs[1:N] : [xs; fill(last(xs), N - length(xs))]
+end
+
+
+function Base.getproperty(x::HydraulicProfile, name::Symbol)
+  name in (:profile, :layers, :kv, :dz_cm) && return getfield(x, name)
+  profile = getfield(x, :profile)
+  name === :K_sat && return getproperty(profile, :Ksat)
+  return getproperty(profile, name)
+end
+
+function Base.getproperty(x::ThermalProfile, name::Symbol)
+  name in (:profile, :layers) && return getfield(x, name)
+  return getproperty(getfield(x, :profile), name)
+end
+
 
 
 # 这里应该加一个show function，打印模型参数信息

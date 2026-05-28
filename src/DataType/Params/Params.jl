@@ -1,5 +1,4 @@
 export ParamVeg
-export ParamSoilHydraulic, ParamSoilThermal, ParamSoil
 export ParamBEPS
 export get_params, parameters, update!, get_opt_info
 export filter_params, update_params!
@@ -44,30 +43,6 @@ import ModelParams: filter_params, update_params!
   # # coefficient reflecting the sensitivity of stomata to VPD/moderately N-stressed plants
   N_leaf::FT = 1.74 + 0.71 | (0.5, 5.0)   # leaf Nitrogen content, mean value + 1 SD [g/m2]
   slope_Vc::FT = 33.79 / 57.7 | (0.3, 1.0) # slope for Vcmax-N relationship
-end
-
-
-# 水力参数
-@bounds @with_kw mutable struct ParamSoilHydraulic{FT<:AbstractFloat}
-  θ_vfc::FT = FT(0.30) | (0.10, 0.45)   # volumetric field capacity [-]
-  θ_res::FT = FT(0.10) | (0.02, 0.30)   # volumetric wilting point [-]
-
-  θ_sat::FT = FT(0.45) | (0.25, 0.70)   # volumetric saturation [-]
-  K_sat::FT = FT(5.0) | (0.01, 50.0)   # saturated hydraulic conductivity [cm h-1]
-  ψ_sat::FT = FT(-0.5) | (-2.0, -0.01)  # matric potential at saturation [m]
-  b::FT = FT(5.0) | (1.5, 15.0)    # Campbell parameter [-]
-end
-
-# 热力参数
-@bounds @with_kw mutable struct ParamSoilThermal{FT<:AbstractFloat}
-  κ_dry::FT = FT(0.2) | (0.05, 0.5)      # dry soil thermal conductivity [W m-1 K-1]
-  ρ_soil::FT = FT(1300.0) | (800.0, 1800.0) # soil bulk density [kg m-3]
-  V_SOM::FT = FT(0.02) | (0.0, 0.3)      # organic matter volume fraction [-]
-end
-
-@with_kw mutable struct ParamSoil{FT<:AbstractFloat}
-  hydraulic::ParamSoilHydraulic{FT} = ParamSoilHydraulic{FT}()
-  thermal::ParamSoilThermal{FT} = ParamSoilThermal{FT}()
 end
 
 
