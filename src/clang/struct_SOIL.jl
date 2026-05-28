@@ -1,7 +1,7 @@
 nzero(n) = tuple(zeros(n)...) # n double zero
 const NT10 = NTuple{10,Cdouble}
 
-@with_kw mutable struct Soil_c <: AbstractSoil
+@with_kw mutable struct Soil_c <: AbstractSoil{Float64,5}
   flag        ::Cint = Cint(0)
   n_layer     ::Cint = Cint(5)
   step_period ::Cint = Cint(1)

@@ -58,7 +58,10 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   θ_sat = fill(FT(p.θ_sat), N) # [%]
   # θ_vfc = fill(FT(p.θ_vfc), n) # [%]
   θ_res = fill(FT(p.θ_res), N) # [%]
-  ψ_sat = _fit_layers(FT, p.ψ_sat, N)    # [m], positive suction at saturation (Campbell 1974 convention)
+  # GlobalData stores ψ_sat as positive suction in [m] (Campbell 1974 convention).
+  # ModelParams/soil_moisture_Q0! expects negative ψ_sat in [cm] (Richards convention).
+  # Convert once here so the HydraulicProfile is compatible with both solvers.
+  ψ_sat = -_fit_layers(FT, p.ψ_sat, N) .* FT(100)   # [m] positive → [cm] negative
 
   SOIL_THERMAL_DENSITY = [1300.0, 1500.0, 1517.0, 1517.0, 1517.0] # [kg m-3]
   SOIL_ORGANIC_MATTER = [0.05, 0.02, 0.01, 0.01, 0.003]           # volume fraction, 0-1

@@ -43,12 +43,13 @@ function update_surface_water!(st::S, ps::P, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
-  (; θ_sat, K_sat, ψ_sat, b) = get_hydraulic(ps)
+  (; θ_sat, K_sat, b) = get_hydraulic(ps)
+  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
   (; θ, f_water, Tsoil_c, dz, z_water, r_rain_g) = st
   r_drainage = ps.r_drainage
 
   update_SoilWaterFrac!(f_water, Tsoil_c; n)
-  inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat, b, f_water[1], z_water, r_rain_g, kstep)
+  inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat_m, b, f_water[1], z_water, r_rain_g, kstep)
   st.z_water = (z_water / kstep + r_rain_g - inf) * kstep * r_drainage # Ponded water after runoff
   inf
 end
@@ -58,7 +59,8 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
   S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
 
   n = st.n_layer
-  (; θ_sat, K_sat, ψ_sat, b, θ_res) = get_hydraulic(ps)
+  (; θ_sat, K_sat, b, θ_res) = get_hydraulic(ps)
+  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
   (; dz, f_water, Kavg, Kmid, ψ, θ, ETi, r_waterflow) = st
 
   total_t, max_Fb = 0.0, 0.0
@@ -67,7 +69,7 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
     # the unsaturated soil water retention. LHe
     # Hydraulic conductivity: Bonan, Table 8.2, Campbell 1974, K = K_sat*(θ/θ_sat)^(2b+3)
     for i in 1:n
-      ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat[i], b[i])
+      ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat_m[i], b[i])
       Kmid[i] = f_water[i] * cal_K(θ[i], θ_sat[i], K_sat[i] / 360000.0, b[i]) # Hydraulic conductivity, [m/s]
     end
 

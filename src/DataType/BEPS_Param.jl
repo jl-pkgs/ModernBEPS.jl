@@ -136,7 +136,9 @@ function Params2Soil!(soil::Soil, params::ParamBEPS{FT}; BF=false) where {FT}
   soil.θ_res[1:N] .= Cdouble.(hydraulic.θ_res)
   soil.θ_sat[1:N] .= Cdouble.(hydraulic.θ_sat)
   soil.K_sat[1:N] .= Cdouble.(hydraulic.K_sat)
-  soil.ψ_sat[1:N] .= Cdouble.(hydraulic.ψ_sat)
+  # hydraulic.ψ_sat is in negative cm (ModelParams convention);
+  # Soil.ψ_sat expects positive m (BEPS/Campbell 1974 convention).
+  soil.ψ_sat[1:N] .= Cdouble.(-hydraulic.ψ_sat ./ 100.0)
   soil.b[1:N] .= Cdouble.(hydraulic.b)
 
   soil.κ_dry[1:N] .= Cdouble.(thermal.κ_dry)
@@ -166,7 +168,9 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
   hydraulic.profile.θ_sat .= FT.(soil.θ_sat[1:N])
   hydraulic.profile.Ksat .= FT.(soil.K_sat[1:N])
   hydraulic.kv.kv .= FT.(soil.K_sat[1:N])
-  hydraulic.profile.ψ_sat .= FT.(soil.ψ_sat[1:N])
+  # Soil.ψ_sat is in positive m (BEPS convention);
+  # hydraulic.profile.ψ_sat expects negative cm (ModelParams convention).
+  hydraulic.profile.ψ_sat .= FT.(-soil.ψ_sat[1:N] .* 100.0)
   hydraulic.profile.b .= FT.(soil.b[1:N])
   hydraulic.dz_cm .= FT.(100 .* params.dz)
 

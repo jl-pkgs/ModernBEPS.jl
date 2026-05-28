@@ -1,7 +1,8 @@
 # Function to compute soil water stress factor
 function soil_water_factor_v2(st::S, ps::P) where {S<:Union{StateBEPS,Soil},P<:Union{ParamBEPS,Soil}}
   (; ψ_min, alpha) = ps
-  (; θ_sat, ψ_sat, b) = get_hydraulic(ps)
+  (; θ_sat, b) = get_hydraulic(ps)
+  ψ_sat_m = _get_ψ_sat_m(ps)   # positive [m], handles both ParamBEPS and Soil
 
   θ = st.θ
   n = st.n_layer
@@ -11,7 +12,7 @@ function soil_water_factor_v2(st::S, ps::P) where {S<:Union{StateBEPS,Soil},P<:U
 
   if st.ψ[1] <= 0.000001
     for i in 1:n
-      st.ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat[i], b[i])
+      st.ψ[i] = cal_ψ(θ[i], θ_sat[i], ψ_sat_m[i], b[i])
     end
   end
 

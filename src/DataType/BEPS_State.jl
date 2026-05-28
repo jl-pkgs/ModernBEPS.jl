@@ -27,7 +27,7 @@ import ModelParams: AbstractSoil
 # ?     : 需要优化的参数
 # state : 状态变量
 # //    : 未使用的参数
-@with_kw mutable struct Soil <: AbstractSoil
+@with_kw mutable struct Soil <: AbstractSoil{Float64,5}
   flag        ::Cint    = Cint(0) # // not used
   n_layer     ::Cint    = Cint(5) # 土壤层数
   step_period ::Cint    = Cint(1) # // not used
@@ -96,7 +96,7 @@ end
 
 # 拖着`ρ_snow`，`ρ_snow`也是一个状态连续的变量
 # https://www.eoas.ubc.ca/courses/atsc113/snow/met_concepts/07-met_concepts/07b-newly-fallen-snow-density/
-@with_kw mutable struct StateBEPS <: AbstractSoil
+@with_kw mutable struct StateBEPS <: AbstractSoil{Float64,5}
   n_layer    ::Cint = Cint(5) # 土壤层数
   N          ::Int  = 5       # Bonan-Q0 算法所需，与 n_layer 保持同值
   dz         ::Vector{Float64} = zeros(10) # 土壤厚度（从 ps 复制，方便计算）
@@ -155,12 +155,7 @@ end
   K₊ₕ     ::Vector{Float64} = zeros(10)  # [cm h⁻¹] 层界面水力传导率
 
   # 三对角矩阵求解临时量
-  a ::Vector{Float64} = zeros(10)
-  b ::Vector{Float64} = zeros(10)
-  c ::Vector{Float64} = zeros(10)
-  d ::Vector{Float64} = zeros(10)
-  e ::Vector{Float64} = zeros(10)
-  f ::Vector{Float64} = zeros(10)
+  tri::TriSolver{Float64} = TriSolver{Float64,10}()
 end
 
 

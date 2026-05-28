@@ -7,6 +7,12 @@ export UpdateHeatFlux, UpdateThermal_Cv,
 
 
 get_hydraulic(ps::ParamBEPS) = ps.hydraulic
+
+# Return ψ_sat in positive [m] regardless of the param type:
+#   ParamBEPS stores ψ_sat in negative [cm] (ModelParams convention) → convert.
+#   Soil/Soil_c stores ψ_sat in positive [m] (BEPS/Campbell convention) → pass through.
+_get_ψ_sat_m(ps::ParamBEPS) = abs.(get_hydraulic(ps).ψ_sat) ./ 100.0
+_get_ψ_sat_m(ps::Soil)      = ps.ψ_sat
 get_hydraulic(ps::Soil) = ps
 
 get_thermal(ps::ParamBEPS) = ps.thermal
