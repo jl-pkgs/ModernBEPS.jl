@@ -17,7 +17,7 @@ function soil_water_factor_v2(st::S, ps::P) where {S<:Union{StateBEPS,Soil},P<:U
 
   for i in 1:n
     # psi_sr in m H2O! He 2017 JGR-B, Eq. 4
-    ψ_cm = -st.ψ[i]
+    ψ_cm = max(-st.ψ[i], 0.0)
     st.f_stress[i] = ψ_cm > ψ_min ? 1.0 / (1 + ((ψ_cm - ψ_min) / ψ_min)^alpha) : 1.0
     st.f_temp[i] = st.Tsoil_p[i] > 0.0 ? 1.0 - exp(t1 * st.Tsoil_p[i]^t2) : 0
 

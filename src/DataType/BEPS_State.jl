@@ -66,13 +66,13 @@ import ModelParams: AbstractSoil
   Tsoil_c     ::Vector{Float64} = zeros(10) # [state], soil temperature in current time
 
   f_water     ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
-  ψ           ::Vector{Float64} = zeros(10) # [state], soil matric potential，现按 [negative cm] 存储
+  ψ           ::Vector{Float64} = zeros(10) # [state], soil matric potential, [negative cm]
   θb          ::Vector{Float64} = zeros(10) # // not used, θ at the bottom of each layer
   ψb          ::Vector{Float64} = zeros(10) # // not used
-  r_waterflow ::Vector{Float64} = zeros(10) # [state], vertical water flow rate
-  Kmid        ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point，现按 [cm h-1] 存储
+  r_waterflow ::Vector{Float64} = zeros(10) # [state], vertical water flow rate，现按 [cm h-1] 存储
+  Kmid        ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point, [cm h-1]
   Kb          ::Vector{Float64} = zeros(10) # // not used
-  Kavg        ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers，现按 [cm h-1] 存储
+  Kavg        ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers, [cm h-1]
   Cv          ::Vector{Float64} = zeros(10) # [state], volume heat capacity
   κ           ::Vector{Float64} = zeros(10) # [state]
   ETi         ::Vector{Float64} = zeros(10) # [state], 每层蒸发量ET in each layer
@@ -127,7 +127,7 @@ end
 
   f_water    ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
   ψ          ::Vector{Float64} = zeros(10) # [state], soil matric potential，现按 [negative cm] 存储
-  r_waterflow::Vector{Float64} = zeros(10) # [state], vertical water flow rate
+  r_waterflow::Vector{Float64} = zeros(10) # [state], vertical water flow rate，现按 [cm h-1] 存储
   Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point (旧求解器)，现按 [cm h-1] 存储
   Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers (旧求解器)，现按 [cm h-1] 存储
   Cv         ::Vector{Float64} = zeros(10) # [state], volume heat capacity

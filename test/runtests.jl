@@ -11,4 +11,5 @@ include("test-beps_modern.jl")
 
 include("test-ModelParams.jl")
 include("test-utilize.jl")
+include("test-UpdateSoilMoisture_Q0.jl")
 include("modules/modules.jl")

@@ -25,7 +25,7 @@ function is_soil_equal(p_jl, p_c; tol=1e-7, verbose=false)
     if name_jl == :K_sat
       # C version uses m/s, Julia uses cm/h
       x_jl = x_jl ./ 360000.0
-    elseif name_jl in (:Kmid, :Kavg)
+    elseif name_jl in (:Kmid, :Kavg, :r_waterflow)
       x_jl = x_jl ./ 360000.0
     elseif name_jl == :ψ
       x_jl = .-x_jl ./ 100.0

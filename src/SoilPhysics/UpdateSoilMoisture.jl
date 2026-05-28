@@ -28,8 +28,8 @@ function cal_infiltration(θ::V, dz::V,
   # pdv(psi, z) = [(psi_0 + z_0) - (psi_1 + z_1)] / [z_0 - z_1] = 1 + (psi_0 - psi_1) / Δz
   dψ_cm = -(θ_sat[1] - θ[1]) * ψ_sat[1] * b[1] / θ_sat[1]
   dz_cm = dz[1] * 100.0
-  inf_max = frac_water * K_sat[1] * (1 + dψ_cm / dz_cm) / 360000.0    # [cm h-1] -> [m s-1]
-  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0)          # [m s-1]
+  inf_max = frac_water * K_sat[1] * (1 + dψ_cm / dz_cm)               # [cm h-1]
+  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0) * 360000.0 # [m s-1] -> [cm h-1]
   clamp(inf_wa, 0, inf_max)
 end
 
@@ -37,7 +37,7 @@ end
 """
     update_surface_water!(st, ps, kstep) -> inf
 
-更新地表积水 `state.z_water`：处理降雨入渗和地表径流，返回入渗率 [m/s]。
+更新地表积水 `state.z_water`：处理降雨入渗和地表径流，返回入渗率 [cm/h]。
 与 `UpdateSoilMoisture` 共享相同物理，但不更新 θ，适用于观测土壤水模式。
 """
 function update_surface_water!(st::S, ps::P, kstep::Float64) where {
@@ -50,7 +50,8 @@ function update_surface_water!(st::S, ps::P, kstep::Float64) where {
 
   update_SoilWaterFrac!(f_water, Tsoil_c; n)
   inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat, b, f_water[1], z_water, r_rain_g, kstep)
-  st.z_water = (z_water / kstep + r_rain_g - inf) * kstep * r_drainage # Ponded water after runoff
+  inf_ms = inf / 360000.0 # [cm h-1] -> [m s-1]
+  st.z_water = (z_water / kstep + r_rain_g - inf_ms) * kstep * r_drainage # Ponded water after runoff
   inf
 end
 
@@ -82,10 +83,10 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
       # [(ψ[i] + z_i) - (ψ[i+1] + z_i+1)] / (z_i - z_i+1) = 1 - (ψ[i+1] - ψ[i]) / Δz
       _Δz_cm = (dz[i] + dz[i+1])/2 * 100.0
       grad_ψ = 1 - (ψ[i+1] - ψ[i]) / _Δz_cm
-      Q = Kavg[i] * grad_ψ / 360000.0 # [cm h-1] -> [m s-1]
+      Q = Kavg[i] * grad_ψ # [cm h-1]
 
       # `Q_max`出现了单位不匹配的问题，导致Q_max未发挥作用
-      Q_max = (θ_sat[i+1] - θ[i+1]) * dz[i+1] / kstep + ETi[i+1]
+      Q_max = ((θ_sat[i+1] - θ[i+1]) * dz[i+1] / kstep + ETi[i+1]) * 360000.0 # [m s-1] -> [cm h-1]
       Q = min(Q, Q_max)
 
       r_waterflow[i] = Q
@@ -96,13 +97,14 @@ function solve_SM_beps(st::S, ps::P, inf::Float64, kstep::Float64) where {
     Δt = guess_step(max_Fb) # this_step
     total_t += Δt
     total_t > kstep && (Δt -= (total_t - kstep))
+    inf_ms = inf / 360000.0
 
     # from there: kstep is replaced by this_step. LHE
     for i in 1:n
       if i == 1
-        θ[i] += (inf - r_waterflow[i] - ETi[i]) * Δt / dz[i]
+        θ[i] += (inf_ms - r_waterflow[i] / 360000.0 - ETi[i]) * Δt / dz[i] # [cm h-1] -> [m s-1]
       else
-        θ[i] += (r_waterflow[i-1] - r_waterflow[i] - ETi[i]) * Δt / dz[i]
+        θ[i] += ((r_waterflow[i-1] - r_waterflow[i]) / 360000.0 - ETi[i]) * Δt / dz[i]
       end
       θ[i] = clamp(θ[i], θ_res[i], θ_sat[i])
     end
@@ -150,9 +152,9 @@ end
 # 如果流速过快，则减小时间步长
 function guess_step(max_Fb)
   # this constraint is too large
-  if max_Fb > 1.0e-5 # 864 mm/day
+  if max_Fb > 3.6 # 864 mm/day
     Δt = 1.0
-  elseif max_Fb > 1.0e-6 # 86.4 mm/day
+  elseif max_Fb > 0.36 # 86.4 mm/day
     Δt = 30.0 # seconds
   else
     Δt = 360.0
