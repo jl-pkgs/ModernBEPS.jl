@@ -1,6 +1,6 @@
 using BEPS, Test
 
-@testset "UpdateSoilMoisture_Q0! — Bonan-Q0 implicit solver" begin
+@testset "UpdateSoilMoisture(; SolveSM_fn=SolveSM_Bonan) — Bonan-Q0 implicit solver" begin
 
   # ── 通用初始化 ───────────────────────────────────────────────────────────
   function make_state(; SoilType=4, VegType="DBF", θ0=0.3, r_rain_g=0.0)
@@ -13,7 +13,7 @@ using BEPS, Test
   @testset "No crash, correct output shape" begin
     st, ps = make_state()
     Root_Water_Uptake(st, 0.0, 0.0, 0.0)
-    @test_nowarn UpdateSoilMoisture_Q0!(st, ps, 3600.0)
+    @test_nowarn UpdateSoilMoisture(st, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
     n = Int(st.n_layer)
     @test length(st.θ) >= n
     @test all(isfinite, st.θ[1:n])
@@ -26,7 +26,7 @@ using BEPS, Test
       st, ps = make_state(; SoilType, r_rain_g=1e-4)
       Root_Water_Uptake(st, 1e-3, 5e-4, 1e-5)
       for _ in 1:24
-        UpdateSoilMoisture_Q0!(st, ps, 3600.0)
+        UpdateSoilMoisture(st, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
       end
       n = st.n_layer
       @test all(st.θ[1:n] .>= 0.0)
@@ -40,7 +40,7 @@ using BEPS, Test
     Root_Water_Uptake(st, 0.0, 0.0, 0.0)
     θ_before = st.θ[1]
     for _ in 1:6
-      UpdateSoilMoisture_Q0!(st, ps, 3600.0)
+      UpdateSoilMoisture(st, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
     end
     θ_after = st.θ[1]
     @test θ_after >= θ_before - 1e-6   # 有降雨时应增加，至少不应降低
@@ -52,7 +52,7 @@ using BEPS, Test
     Root_Water_Uptake(st, 2e-3, 1e-3, 5e-4)   # 同时存在蒸腾和蒸发
     θ_init = copy(st.θ[1:st.n_layer])
     for _ in 1:48
-      UpdateSoilMoisture_Q0!(st, ps, 3600.0)
+      UpdateSoilMoisture(st, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
     end
     @test sum(st.θ[1:st.n_layer]) < sum(θ_init)
   end
@@ -61,7 +61,7 @@ using BEPS, Test
   @testset "fix_sm=true leaves θ unchanged" begin
     st, ps = make_state(; r_rain_g=1e-4)
     θ_before = copy(st.θ)
-    UpdateSoilMoisture_Q0!(st, ps, 3600.0; fix_sm=true)
+    UpdateSoilMoisture(st, ps, 3600.0; fix_sm=true, SolveSM_fn=SolveSM_Bonan)
     @test st.θ == θ_before
     @test st.z_water >= 0.0
   end
@@ -72,7 +72,7 @@ using BEPS, Test
 
     θ_before = copy(st_explicit.θ)
     UpdateSoilMoisture(st_explicit, ps, 3600.0; fix_sm=true)
-    UpdateSoilMoisture_Q0!(st_q0, ps, 3600.0; fix_sm=true)
+    UpdateSoilMoisture(st_q0, ps, 3600.0; fix_sm=true, SolveSM_fn=SolveSM_Bonan)
 
     @test st_explicit.θ == θ_before
     @test st_q0.θ == θ_before
@@ -84,7 +84,7 @@ using BEPS, Test
     Root_Water_Uptake(st, 5e-4, 2e-4, 1e-4)
 
     for _ in 1:24
-      UpdateSoilMoisture_Q0!(st, ps, 3600.0)
+      UpdateSoilMoisture(st, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
       soil_water_factor_v2(st, ps)
     end
 
@@ -104,7 +104,7 @@ using BEPS, Test
 
     for _ in 1:24
       UpdateSoilMoisture(st_old, ps, 3600.0)
-      UpdateSoilMoisture_Q0!(st_new, ps, 3600.0)
+      UpdateSoilMoisture(st_new, ps, 3600.0; SolveSM_fn=SolveSM_Bonan)
     end
 
     n = st_old.n_layer

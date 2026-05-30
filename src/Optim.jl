@@ -14,9 +14,9 @@ function InitState0(model::ParamBEPS{FT}, forcing::MetSeries{FT}) where {FT<:Abs
 end
 
 
-function predict(theta::Vector{FT}, model::ParamBEPS{FT}, 
-  forcing::MetSeries{FT}, lai::Vector{FT}, dates_UTC::Vector{DateTime}; 
-  paths, lon::FT, lat::FT) where {FT<:AbstractFloat}
+function predict(theta::Vector{FT}, model::ParamBEPS{FT},
+  forcing::MetSeries{FT}, lai::Vector{FT}, dates_UTC::Vector{DateTime};
+  paths, lon::FT, lat::FT, SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
 
   model = deepcopy(model)
   params = parameters(model; paths)
@@ -25,7 +25,7 @@ function predict(theta::Vector{FT}, model::ParamBEPS{FT},
 
   state = InitState0(model, forcing)
   df_fluxes, df_ET, states, caches = simulate(forcing, lai, dates_UTC;
-    ps=model, state, lon, lat)
+    ps=model, state, lon, lat, SolveSM_fn)
 
   BEPS.update!(model, paths, theta_prev) # 恢复原参数值
   df_fluxes, df_ET, states, caches
@@ -33,11 +33,11 @@ end
 
 function goodness(theta::Vector{FT}, model::ParamBEPS{FT},
   forcing::MetSeries{FT}, lai::Vector{FT}, dates_UTC::Vector{DateTime};
-  paths, lon::FT, lat::FT, depths_SM::Vector{FT}, depths_TS::Vector{FT}, FluxDay::DataFrame, 
-  ignored...) where {FT<:AbstractFloat}
+  paths, lon::FT, lat::FT, depths_SM::Vector{FT}, depths_TS::Vector{FT}, FluxDay::DataFrame,
+  SolveSM_fn=SolveSM_BEPS, ignored...) where {FT<:AbstractFloat}
 
   df_fluxes, df_ET, states, caches = predict(theta, model, forcing, lai, dates_UTC;
-    paths, lon, lat)
+    paths, lon, lat, SolveSM_fn)
 
   dates_local = dates_UTC .+ Hour(8) # [UTC] -> [local]
   gof, data_sim, data_obs = BEPS_GOF(df_fluxes, states, dates_local, FluxDay;

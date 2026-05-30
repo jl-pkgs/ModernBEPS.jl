@@ -3,7 +3,8 @@ export UpdateHeatFlux, UpdateThermal_Cv,
   Update_ice_ratio,
   UpdateThermal_κ,
   soil_water_factor_v2,
-  UpdateSoilMoisture, UpdateSoilMoisture_Q0!, Root_Water_Uptake
+  UpdateSoilMoisture, Root_Water_Uptake,
+  SolveSM_BEPS, SolveSM_Bonan
 
 
 get_hydraulic(ps::ParamBEPS) = ps.hydraulic
@@ -24,7 +25,6 @@ get_root_decay(ps::Soil) = ps.r_root_decay
 
 include("UpdateHeatFlux.jl")
 include("UpdateSoilMoisture.jl")
-include("Solve_SM.jl")
 include("soil_water_factor_v2.jl")
 
 

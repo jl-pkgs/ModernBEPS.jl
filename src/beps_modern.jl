@@ -27,6 +27,7 @@ function simulate(forcing::MetSeries, lai::Vector, dates::AbstractVector;
   lon::FT=120.0, lat::FT=20.0,
   kstep::Float64=360.0,
   fix_snowpack=true, fix_annual_Ta=true,
+  SolveSM_fn=SolveSM_BEPS,
   SM_obs::Union{Nothing, AbstractMatrix}=nothing,
   TS_obs::Union{Nothing, AbstractMatrix}=nothing,
   VARS_STATE::Vector{Symbol}=DEFAULT_STATE_EXPORT,
@@ -75,7 +76,7 @@ function simulate(forcing::MetSeries, lai::Vector, dates::AbstractVector;
 
     inter_prg_jl(jday, hour, lon, lat, _lai, clumping,
       met, ps, state, mid_flux, mid_ET, cache; kstep,
-      fix_snowpack, fix_annual_Ta, Ta_annual, fix_sm, fix_Tsoil)
+      fix_snowpack, fix_annual_Ta, Ta_annual, fix_sm, fix_Tsoil, SolveSM_fn)
 
     fluxes[i] = mid_flux
     fluxes_ET[i] = mid_ET
