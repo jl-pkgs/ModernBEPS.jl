@@ -50,7 +50,7 @@ function cal_infiltration(θ::V, dz::V,
   dψ_cm = -(θ_sat[1] - θ[1]) * ψ_sat[1] * b[1] / θ_sat[1]
   dz_cm = dz[1] * 100.0
   inf_max = frac_water * K_sat[1] * (1 + dψ_cm / dz_cm)               # [cm h-1]
-  inf_wa = max(frac_water * (z_water / kstep + r_rain_g), 0) * 360000.0 # [m s-1] -> [cm h-1]
+  inf_wa = max((z_water / kstep + r_rain_g), 0) * 360000.0 # [m s-1] -> [cm h-1]
   clamp(inf_wa, 0, inf_max)
 end
 

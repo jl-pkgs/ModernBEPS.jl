@@ -1,0 +1,137 @@
+```{r}
+pacman::p_load(
+  Ipaper, data.table, dplyr, lubridate,
+  JLD2, JuliaCall,
+  ggplot2, gg.layers, ggrepel
+)
+jld_setup()
+
+check_var <- function(d) {
+  if ("var" %in% names(d)) {
+    d$var <- julia_call("String.", d$var)
+  }
+  data.table(d)
+}
+```
+
+```{r}
+fs <- dir2("Project_ChinaFlux/OUTPUT/NSE")
+```
+
+# 1 拟合优度
+## 1.1 SM
+
+```{r}
+get_GOF_SM <- function(indir) {
+  fs <- dir2(indir)
+  sites <- gsub("BEPS_|.jld2", "", basename(fs))
+  names(fs) <- sites
+
+  fs <- fs # MF_乔灌混交林_燕山
+  sites <- names(fs) %>% sort()
+  st <- data.table(site = sites, I = seq_along(sites)) %>%
+    mutate(label = sprintf("%s. %s", I, site))
+
+  lst <- map(fs, jld_load)
+
+  l <- lst[[1]]
+  gof_prev <- map(lst, \(l) check_var(l$gof$SM)) %>% melt_list("site")
+  gof_optim <- map(lst, \(l) check_var(l$gof_opt$SM)) %>% melt_list("site")
+  print(gof_optim$n)
+  
+  gof <- list("Original" = gof_prev, "Optimized" = gof_optim) %>% melt_list("type")
+
+  dat <- melt(gof, c("type", "site", "var", "n_valid"), variable.name = "index") %>%
+    dcast(site + var + index ~ type, value.var = "value") %>%
+    merge(st, by = "site")
+
+  Table1 <- function(INDEX = "NSE") {
+    mutate(dat, diff = Optimized - Original) %>%
+      relocate(I, site, var, index, Original) %>%
+      arrange(I) %>%
+      subset(index == INDEX) %>%
+      select(-label, -index) %>%
+      dt_round(3)
+  }
+  tbl <- list(NSE = Table1("NSE"), KGE = Table1("KGE"), R2 = Table1("R2"))
+  tbl$R2
+}
+
+indir = "Project_ChinaFlux/OUTPUT/Bonan/NSE"
+tbl_Bonan <- get_GOF_SM(indir)
+
+indir <- "Project_ChinaFlux/OUTPUT/NSE"
+tbl_BEPS <- get_GOF_SM(indir)
+
+tbl <- list(BEPS = tbl_BEPS, Bonan = tbl_Bonan) %>% melt_list("type")
+pdat <- melt(tbl, c("type", "I", "site", "var"), variable.name = "variable") %>% 
+  dcast(I + site + var + variable ~ type, value.var = "value")
+```
+
+
+```{r}
+p <- ggplot(pdat[variable %in% c("Original", "Optimized")], aes(BEPS, Bonan)) +
+  geom_point(aes(color = as.factor(I)), size = 8, alpha = 0.4) +
+  geom_text(aes(label = I, color = as.factor(I)), size = 5, fontface = "bold", show.legend = FALSE) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~variable, ncol = 1) +
+  labs(x = "BEPS", y = "Bonan") +
+  scale_color_discrete(name = "SITE", labels = st$label) +
+  guides(
+    colour = guide_legend(
+      override.aes = list(size = 8, alpha = 0.35)
+    )
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top"
+  )
+
+write_fig(p, "Rplot_SM.pdf", 10, 15, show = FALSE)
+```
+
+
+
+## 1.2 Flux
+
+```{r}
+gof_prev <- map(lst, \(l) l$gof$Flux) %>% melt_list("site")
+gof_optim <- map(lst, \(l) l$gof_opt$Flux) %>% melt_list("site")
+
+gof <- list("Original" = gof_prev, "Optimized" = gof_optim) %>% melt_list("type")
+dat <- melt(gof, c("type", "site", "var", "n_valid"), variable.name = "index") %>%
+  dcast(site + var + index ~ type, value.var = "value") %>%
+  merge(st, by = "site")
+```
+
+```{r}
+cols <- scales::hue_pal()(11)
+colored_labels <- mapply(
+  function(col, lab) glue::glue("<span style='color:{col}'>{lab}</span>"),
+  cols, st$label
+)
+
+set_font()
+indexes <- c("NSE", "R2", "KGE", "RMSE", "MAE", "bias_perc")[1:3]
+
+p <- ggplot(dat[index %in% "KGE"], aes(Original, Optimized)) +
+  geom_point(aes(color = as.factor(I)), size = 8, alpha = 0.4) +
+  geom_text(aes(label = I, color = as.factor(I)), size = 5, fontface = "bold", show.legend = FALSE) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+  facet_wrap(~var, ncol = 1) +
+  labs(x = "BEPS", y = "Optimized") +
+  scale_color_discrete(name = "SITE", labels = st$label) +
+  guides(
+    colour = guide_legend(
+      override.aes = list(size = 8, alpha = 0.35)
+    )
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "top"
+  )
+write_fig(p, "Rplot.pdf", 10, 15, show = FALSE)
+```
+
+
+## 1.3 逐日拟合结果

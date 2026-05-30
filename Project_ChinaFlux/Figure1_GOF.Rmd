@@ -17,23 +17,21 @@ check_var <- function(d) {
 
 ```{r}
 fs <- dir2("Project_ChinaFlux/OUTPUT/NSE")
+fs <- dir2("Project_ChinaFlux/OUTPUT/Bonan/NSE")
 sites <- gsub("BEPS_|.jld2", "", basename(fs))
 names(fs) <- sites
 
 fs = fs # MF_乔灌混交林_燕山
 sites <- names(fs) %>% sort()
-
 st <- data.table(site = sites, I = seq_along(sites)) %>%
   mutate(label = sprintf("%s. %s", I, site))
-```
 
-## 拟合优度
-```{r}
 lst <- map(fs, jld_load)
-# l = jld_load(fs[1])
+
 ```
 
-## SM
+# 1 拟合优度
+## 1.1 SM
 
 ```{r}
 l = lst[[1]]
@@ -65,7 +63,7 @@ tbl <- list(
 
 
 
-## Flux
+## 1.2 Flux
 
 ```{r}
 gof_prev <- map(lst, \(l) l$gof$Flux) %>% melt_list("site")
@@ -104,11 +102,8 @@ p <- ggplot(dat[index %in% "KGE"], aes(Original, Optimized)) +
   theme(
     legend.position = "top"
   )
-write_fig(p, "d:/Rplot.pdf", 10, 15)
+write_fig(p, "Rplot.pdf", 10, 15, show = FALSE)
 ```
 
 
-## 逐日拟合结果
-```{r}
-
-```
+## 1.3 逐日拟合结果

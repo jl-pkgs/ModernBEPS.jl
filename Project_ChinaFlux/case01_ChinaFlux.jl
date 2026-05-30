@@ -28,6 +28,8 @@ function LoadData(SITE)
 
   d_forcing = FORCING[FORCING.site.==SITE, 2:end]
   rename!(d_forcing, [:Ta_canopy => :Tair, :RH_canopy => :RH, :WS_canopy => :Uz])
+
+  @assert Date(parse_time(d_forcing.time[1])) == FluxALL.date[1] "date_beg should be same"
   if (nrow(d_forcing) - ntime2) > 0
     @warn "驱动数据时间步长与率定数据不匹配，已截断驱动数据以匹配率定数据长度"
     d_forcing = d_forcing[1:ntime2, :]
@@ -43,12 +45,14 @@ function LoadData(SITE)
 end
 
 
-function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
-  goal=:NSE, goal_multiplier=-1)
+function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT", overwrite=false,
+  goal=:NSE, goal_multiplier=-1, SolveSM_fn=SolveSM_Bonan)
 
+  mkpath(outdir)
   fout = "$outdir/BEPS_$(SITE).jld2"
+  (isfile(fout) && !overwrite) && return
+
   printstyled("[site]: $SITE\n", color=:blue, bold=true, underline=true)
-  # isfile(fout) && return
 
   # 率定所需数据
   # data-raw/Daily/BEPS/DBF_天然栎林_宝天曼_FluxLAISoil_Daily_v20260511.csv
@@ -67,7 +71,7 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
 
   state = InitState0(model, forcing)
   @time df_fluxes, df_ET, states, caches = simulate(forcing, lai, dates_UTC;
-    ps=model, state, lon, lat)
+    ps=model, state, lon, lat, SolveSM_fn)
   @time gof, data_sim, data_obs = BEPS_GOF(df_fluxes, states, dates_local, FluxALL;
     depths_SM, depths_TS)
   gof
@@ -84,7 +88,7 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
   paths = opts.path
 
   kw_loss = (; lon, lat, depths_SM, depths_TS, FluxDay=FluxALL,
-    goal, goal_multiplier)
+    goal, goal_multiplier, SolveSM_fn)
 
   @time theta_opt = optim(model, forcing, lai, dates_UTC; paths, maxn, kw_loss...)
   opts.theta_opt = theta_opt
@@ -96,9 +100,15 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT",
 end
 
 
-for SITE in SITES[1:1]
+
+for i in eachindex(SITES)
+  !isCurrentWorker(i) && continue
+
+  SITE = SITES[i]
   try
-    RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/NSE", goal=:NSE, goal_multiplier=-1)
+    # SolveSM_BEPS 的结果已算完；本次只算 SolveSM_Bonan，输出到独立目录
+    RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/Bonan/NSE",
+      goal=:NSE, goal_multiplier=-1, SolveSM_fn=SolveSM_Bonan)
   catch ex
     @error "Error processing site $SITE: $ex"
   end
