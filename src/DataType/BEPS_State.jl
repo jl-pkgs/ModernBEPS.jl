@@ -34,6 +34,7 @@ import ModelParams: AbstractSoil
 
   z_water ::Cdouble = Cdouble(0) # [state]
   z_snow  ::Cdouble = Cdouble(0) # [state]
+  inf::Float64 = 0.0             # [cm h-1], 本步下渗率，UpdateSoilMoisture 写入
 
   # the rainfall rate, un--on understory on ground surface  m/s
   r_rain_g    ::Cdouble = Cdouble(0)        # [state], 达到地地表降水, PE, [m/s]
@@ -112,6 +113,7 @@ end
 
   z_water    ::Cdouble = Cdouble(0)        # [state]
   z_snow     ::Cdouble = Cdouble(0)        # [state]
+  inf        ::Float64 = 0.0               # [cm h-1], 本步下渗率，UpdateSoilMoisture 写入
 
   # the rainfall rate, un--on understory on ground surface  m/s
   r_rain_g   ::Cdouble = Cdouble(0)        # [state], 达到地地表降水, PE, [m/s]
@@ -198,7 +200,7 @@ function State2Soil!(soil::Soil, st::StateBEPS)
 
   @pack! soil = z_water, z_snow, r_rain_g, f_soilwater,
                 f_root, w_norm, ice_ratio, θ, θ_prev, Tsoil_p, Tsoil_c,
-                f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
+               f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
                 f_temp, w_root, f_stress
   return soil
 end

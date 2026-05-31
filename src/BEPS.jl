@@ -55,6 +55,7 @@ using BEPS.clang
 include("beps_main.jl")
 include("beps_modern.jl")
 include("ultilize.jl")
+include("SoilWater.jl")
 include("Optim.jl")
 
 end # module BEPS

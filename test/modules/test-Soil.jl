@@ -11,34 +11,30 @@ end
 
 function is_soil_equal(p_jl, p_c; tol=1e-7, verbose=false)
   names_c = fieldnames(typeof(p_c))
-  names_jl = fieldnames(typeof(p_jl))
   names_skip = [:θb, :ψb, :θ_vfc]
 
-  for i in eachindex(names_c)
-    name_c = names_c[i]
-    name_jl = names_jl[i]
-    name_jl in names_skip && continue
+  for name_c in names_c
+    @test hasfield(typeof(p_jl), name_c)
+    name_c in names_skip && continue
 
-    x_jl = getfield(p_jl, i)
-    x_c = getfield(p_c, i)
+    x_jl = getfield(p_jl, name_c)
+    x_c = getfield(p_c, name_c)
 
-    if name_jl == :K_sat
+    if name_c == :K_sat
       # C version uses m/s, Julia uses cm/h
       x_jl = x_jl ./ 360000.0
-    elseif name_jl in (:Kmid, :Kavg, :r_waterflow)
+    elseif name_c in (:Kmid, :Kavg, :r_waterflow)
       x_jl = x_jl ./ 360000.0
-    elseif name_jl == :ψ
+    elseif name_c == :ψ
       x_jl = .-x_jl ./ 100.0
-    elseif name_jl == :ψ_sat
+    elseif name_c == :ψ_sat
       x_jl = .-x_jl ./ 100.0
-    elseif name_jl == :ψ_min
+    elseif name_c == :ψ_min
       x_jl = x_jl ./ 100.0
     end
 
     if verbose
-      ## 变量名可能不同
-      color = name_c == name_jl ? :black : :red
-      printstyled("C and Julia: $name_c, $name_jl\n"; color)
+      printstyled("C and Julia: $name_c, $name_c\n"; color=:black)
     end
     @test maximum(abs.(x_c .- x_jl)) <= tol
   end
@@ -195,6 +191,7 @@ end
   UpdateSoilMoisture(soil, 3600.0)
   UpdateSoilMoisture(st, ps, 3600.0)
   @test st.θ[1:5] ≈ soil.θ[1:5]
+  @test st.inf ≈ soil.inf
   @test st.z_water ≈ soil.z_water
   @test st.r_waterflow[1:5] ≈ soil.r_waterflow[1:5]
   @test st.ψ[1:5] ≈ soil.ψ[1:5]
@@ -224,6 +221,7 @@ end
   # 验证所有状态变量一致
   @test st.n_layer == soil.n_layer
   @test st.z_water ≈ soil.z_water
+  @test st.inf ≈ soil.inf
   @test st.z_snow ≈ soil.z_snow
   @test st.f_soilwater ≈ soil.f_soilwater
   @test st.θ[1:5] ≈ soil.θ[1:5]
@@ -234,9 +232,11 @@ end
   # 测试 State2Soil! 回写
   st.θ[1] = 0.5
   st.Tsoil_c[1] = 15.0
+  st.inf = 1.23
   State2Soil!(soil, st)
   @test soil.θ[1] ≈ 0.5
   @test soil.Tsoil_c[1] ≈ 15.0
+  # @test soil.inf ≈ 1.23
 end
 
 

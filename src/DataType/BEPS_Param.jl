@@ -71,7 +71,7 @@ end
 function Base.getproperty(x::HydraulicProfile, name::Symbol)
   name in (:profile, :layers, :kv, :dz_cm) && return getfield(x, name)
   profile = getfield(x, :profile)
-  name === :K_sat && return getproperty(profile, :Ksat)
+  name === :K_sat && return getproperty(profile, :K_sat)
   return getproperty(profile, name)
 end
 
@@ -166,7 +166,7 @@ function Soil2Params!(params::ParamBEPS{FT}, soil::Soil) where {FT}
 
   hydraulic.profile.θ_res .= FT.(soil.θ_res[1:N])
   hydraulic.profile.θ_sat .= FT.(soil.θ_sat[1:N])
-  hydraulic.profile.Ksat .= FT.(soil.K_sat[1:N])
+  hydraulic.profile.K_sat .= FT.(soil.K_sat[1:N])
   hydraulic.kv.kv .= FT.(soil.K_sat[1:N])
   # Soil.ψ_sat is in negative cm;
   # hydraulic.profile.ψ_sat also expects negative cm.

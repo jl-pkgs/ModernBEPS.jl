@@ -71,7 +71,7 @@ function InitParam_Soil(SoilType::Integer, N::Int, FT::Type)
   V_SOM = _fit_layers(FT, SOIL_ORGANIC_MATTER, N)   # [volume fraction], 0-1
 
   dz = _default_dz(FT, N)
-  profile = CampbellLayers{FT,N}(; θ_res, θ_sat, Ksat=K_sat, ψ_sat, b)
+  profile = CampbellLayers{FT,N}(; θ_res, θ_sat, K_sat=K_sat, ψ_sat, b)
   kv = KvLayers{FT,N}(; kv=K_sat)
   hydraulic = HydraulicProfile{FT,N}(profile, kv, FT.(100 .* dz))
   thermal = ThermalProfile{FT,N}(ThermalBaseLayers{FT,N}(; κ_dry, ρ_soil, V_SOM))
