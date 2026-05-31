@@ -128,3 +128,97 @@ function BEPS_GOF(df_fluxes, states, dates_hour, FluxALL; depths_SM, depths_TS)
   gof = (; Flux=gof_Flux, SM=gof_SM, TS=gof_TS)
   gof, data_sim, data_obs
 end
+
+
+"""
+    predict_soilwater_θ1(theta, model, forcing, dates; paths, θ1_obs, ETi_obs, Tsoil_obs, SolveSM_fn)
+
+以第1层观测 θ 为上边界驱动，更新 `paths` 参数后运行 `simulate_soilwater`。
+"""
+function predict_soilwater_θ1(theta::Vector{FT}, model::ParamBEPS{FT},
+  forcing::MetSeries{FT}, dates::Vector{DateTime};
+  paths,
+  θ1_obs::AbstractVector{FT},
+  ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  model = deepcopy(model)
+  theta_prev = parameters(model; paths).value
+  BEPS.update!(model, paths, theta)
+
+  state = InitState0(model, forcing)
+  df = simulate_soilwater(forcing, dates;
+    ps=model, state, ETi_obs, Tsoil_obs, θ1_obs, SolveSM_fn)
+
+  BEPS.update!(model, paths, theta_prev)
+  df
+end
+
+"""
+    goodness_soilwater_θ1(theta, model, forcing, dates; paths, θ1_obs, SM_obs, depths_SM, ...)
+
+以第1层观测 θ 为上边界，计算第 2~n 层的拟合优度（KGE/NSE 等）。
+"""
+function goodness_soilwater_θ1(theta::Vector{FT}, model::ParamBEPS{FT},
+  forcing::MetSeries{FT}, dates::Vector{DateTime};
+  paths,
+  θ1_obs::AbstractVector{FT},
+  SM_obs::DataFrame,
+  depths_SM::Vector{FT},
+  ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  df_sim = predict_soilwater_θ1(theta, model, forcing, dates;
+    paths, θ1_obs, ETi_obs, Tsoil_obs, SolveSM_fn)
+
+  vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i] * 100))cm"), eachindex(depths_SM))
+  n = length(depths_SM)
+
+  θ_cols = filter(name -> startswith(String(name), "θ"), propertynames(df_sim))
+  sort!(θ_cols; by=name -> parse(Int, replace(String(name), "θ" => "")))
+  SM_sim_mat = hcat([df_sim[!, col] for col in θ_cols]...) # ntime × nlayer
+  SM_sim = interp_depths(FT.(SM_sim_mat), depths_SM) # ntime × n
+
+  gof = map(1:n) do j
+    obs_col = SM_obs[!, vars_SM[j]]
+    sim_col = SM_sim[:, j]
+    mask = map(obs_col) do x
+      !ismissing(x) && !isnan(Float64(x))
+    end
+    (; var=vars_SM[j], GOF(Float64.(obs_col[mask]), sim_col[mask])...)
+  end |> DataFrame
+
+  gof
+end
+
+"""
+    optim_soilwater_θ1(model, forcing, dates; paths, θ1_obs, SM_obs, depths_SM, ...)
+
+以第1层观测 θ 为上边界驱动，率定深层土壤水力参数。
+"""
+function optim_soilwater_θ1(model::ParamBEPS{FT}, forcing::MetSeries{FT},
+  dates::Vector{DateTime};
+  paths,
+  θ1_obs::AbstractVector{FT},
+  SM_obs::DataFrame,
+  depths_SM::Vector{FT},
+  goal::Symbol=:KGE, maxn::Int=200,
+  ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  function _loss(theta)
+    gof = goodness_soilwater_θ1(theta, model, forcing, dates;
+      paths, θ1_obs, SM_obs, depths_SM, ETi_obs, Tsoil_obs, SolveSM_fn)
+    -mean(gof[!, goal])
+  end
+
+  params = parameters(model; paths)
+  lb = map(x -> FT(x[1]), params.bound)
+  ub = map(x -> FT(x[2]), params.bound)
+  u0 = params.value
+
+  theta, feval, exitflag = sceua(_loss, u0, lb, ub; maxn, verbose=true, parallel=true)
+  theta
+end
+
+export predict_soilwater_θ1, goodness_soilwater_θ1, optim_soilwater_θ1
