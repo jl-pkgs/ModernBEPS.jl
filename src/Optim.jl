@@ -128,3 +128,128 @@ function BEPS_GOF(df_fluxes, states, dates_hour, FluxALL; depths_SM, depths_TS)
   gof = (; Flux=gof_Flux, SM=gof_SM, TS=gof_TS)
   gof, data_sim, data_obs
 end
+
+_hydraulic_name_map(sym::Symbol) = sym === :K_sat ? :Ksat : sym
+
+function _normalize_paths_soilwater(model::ParamBEPS, paths)
+  N = Int(model.N)
+  out = Vector{Vector{Any}}()
+
+  for path in paths
+    if path isa Tuple
+      if length(path) == 1
+        push!(out, Any[path[1]])
+      elseif length(path) == 2 && path[1] === :hydraulic
+        field = _hydraulic_name_map(path[2])
+        for i in 1:N
+          push!(out, Any[:hydraulic, :profile, field, i])
+        end
+      else
+        push!(out, Any[path...])
+      end
+    elseif path isa AbstractVector
+      push!(out, Any[path...])
+    else
+      throw(ArgumentError("Unsupported path type: $(typeof(path))"))
+    end
+  end
+
+  out
+end
+
+
+"""
+    predict_soilwater(theta, model, forcing, dates; paths, ETi_obs, Tsoil_obs, SolveSM_fn)
+
+更新 `paths` 指定的水力参数后运行 `simulate_soilwater`，用于土壤水参数率定正演。
+"""
+function predict_soilwater(theta::Vector{FT}, model::ParamBEPS{FT},
+  forcing::MetSeries{FT}, dates::Vector{DateTime};
+  paths, ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  model = deepcopy(model)
+  paths_norm = _normalize_paths_soilwater(model, paths)
+  theta_prev = parameters(model; paths=paths_norm).value
+  BEPS.update!(model, paths_norm, theta)
+
+  state = InitState0(model, forcing)
+  df = simulate_soilwater(forcing, dates; ps=model, state, ETi_obs, Tsoil_obs, SolveSM_fn)
+
+  BEPS.update!(model, paths_norm, theta_prev)
+  df
+end
+
+
+"""
+    goodness_soilwater(theta, model, forcing, dates; paths, SM_obs, depths_SM, ...)
+
+土壤水分拟合优度，返回含 KGE/NSE 等指标的 DataFrame。
+
+# Arguments
+- `SM_obs`    : 观测土壤湿度 DataFrame，列名为 `SM_Xcm`（X 为深度cm整数）
+- `depths_SM` : 观测深度 [m] 向量，与模拟层对应
+"""
+function goodness_soilwater(theta::Vector{FT}, model::ParamBEPS{FT},
+  forcing::MetSeries{FT}, dates::Vector{DateTime};
+  paths, SM_obs::DataFrame, depths_SM::Vector{FT},
+  ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  df_sim = predict_soilwater(theta, model, forcing, dates;
+    paths, ETi_obs, Tsoil_obs, SolveSM_fn)
+
+  vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i]*100))cm"), eachindex(depths_SM))
+  n = length(depths_SM)
+  nlayer = Int(model.N)
+
+  SM_sim_mat = hcat([df_sim[!, Symbol("θ$j")] for j in 1:nlayer]...)
+  SM_sim = interp_depths(SM_sim_mat, depths_SM)
+
+  gof = map(1:n) do j
+    obs_col = SM_obs[!, vars_SM[j]]
+    sim_col = SM_sim[:, j]
+    mask = map(x -> !ismissing(x) && !isnan(Float64(x)), obs_col)
+    (; var=vars_SM[j], GOF(Float64.(obs_col[mask]), sim_col[mask])...)
+  end |> DataFrame
+
+  gof
+end
+
+
+"""
+    optim_soilwater(model, forcing, dates; paths, SM_obs, depths_SM, maxn=200, ...)
+
+仅针对土壤水力参数的自动率定，比全模型率定快约10倍。
+
+# Arguments
+- `paths`     : 待率定参数路径，例如 `[(:hydraulic, :K_sat), (:hydraulic, :b)]`
+- `SM_obs`    : 观测土壤湿度 DataFrame，列名为 `SM_Xcm`
+- `depths_SM` : 观测深度 [m] 向量
+- `goal`      : 目标函数，`:KGE` 或 `:NSE`（默认 `:KGE`）
+- `maxn`      : SCE-UA 最大迭代次数
+"""
+function optim_soilwater(model::ParamBEPS{FT}, forcing::MetSeries{FT},
+  dates::Vector{DateTime};
+  paths, SM_obs::DataFrame, depths_SM::Vector{FT},
+  goal::Symbol=:KGE, maxn::Int=200,
+  ETi_obs=nothing, Tsoil_obs=nothing,
+  SolveSM_fn=SolveSM_BEPS) where {FT<:AbstractFloat}
+
+  function _loss(theta)
+    gof = goodness_soilwater(theta, model, forcing, dates;
+      paths, SM_obs, depths_SM, ETi_obs, Tsoil_obs, SolveSM_fn)
+    -mean(gof[!, goal])
+  end
+
+  paths_norm = _normalize_paths_soilwater(model, paths)
+  params = parameters(model; paths=paths_norm)
+  lb = map(x -> FT(x[1]), params.bound)
+  ub = map(x -> FT(x[2]), params.bound)
+  u0 = params.value
+
+  theta, feval, exitflag = sceua(_loss, u0, lb, ub; maxn, verbose=true, parallel=true)
+  theta
+end
+
+export predict_soilwater, goodness_soilwater, optim_soilwater

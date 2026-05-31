@@ -192,6 +192,7 @@ function inter_prg_jl(jday::Int, hour::Int, lon::T, lat::T,
   mid_flux.gpp_u_shaded = GPP.u_shaded
 
   mid_flux.z_water = z_water
+  mid_flux.inf = state.inf
   mid_flux.z_snow = z_snow
   mid_flux.ρ_snow = ρ_snow[]
 

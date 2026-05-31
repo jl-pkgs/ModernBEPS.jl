@@ -23,6 +23,7 @@
   z_water::Cdouble = 0.0       # [m], ponded water depth
   z_snow::Cdouble = 0.0        # [m], snow depth
   ρ_snow::Cdouble = 0.0        # [kg m-3], snow density
+  inf::Cdouble = 0.0           # [cm h-1], infiltration rate
 end
 
 

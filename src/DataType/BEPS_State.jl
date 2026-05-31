@@ -70,6 +70,7 @@ import ModelParams: AbstractSoil
   θb          ::Vector{Float64} = zeros(10) # // not used, θ at the bottom of each layer
   ψb          ::Vector{Float64} = zeros(10) # // not used
   r_waterflow ::Vector{Float64} = zeros(10) # [state], vertical water flow rate，现按 [cm h-1] 存储
+  inf         ::Float64 = 0.0               # [cm h-1], 本步下渗率，UpdateSoilMoisture 写入
   Kmid        ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point, [cm h-1]
   Kb          ::Vector{Float64} = zeros(10) # // not used
   Kavg        ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers, [cm h-1]
@@ -128,6 +129,7 @@ end
   f_water    ::Vector{Float64} = zeros(10) # [state], 冻结因子，用于 UpdateSoilMoisture
   ψ          ::Vector{Float64} = zeros(10) # [state], soil matric potential，现按 [negative cm] 存储
   r_waterflow::Vector{Float64} = zeros(10) # [state], vertical water flow rate，现按 [cm h-1] 存储
+  inf        ::Float64 = 0.0               # [cm h-1], 本步下渗率，UpdateSoilMoisture 写入
   Kmid       ::Vector{Float64} = zeros(10) # [state], hydraulic conductivity at middle point (旧求解器)，现按 [cm h-1] 存储
   Kavg       ::Vector{Float64} = zeros(10) # [state], average conductivity of two soil layers (旧求解器)，现按 [cm h-1] 存储
   Cv         ::Vector{Float64} = zeros(10) # [state], volume heat capacity
@@ -161,7 +163,7 @@ end
 
 const VARS_SCALAR = Tuple(
     f for (f, T) in zip(fieldnames(StateBEPS), fieldtypes(StateBEPS))
-    if T <: AbstractFloat && f ∉ (:Qhc_o,)
+    if T <: AbstractFloat && f ∉ (:Qhc_o, :inf)
 )
 
 const VARS_VECTOR = Tuple(
@@ -176,7 +178,7 @@ const ALL_VARS_STATE = (VARS_SCALAR..., VARS_VECTOR...)
 function StateBEPS(soil::Soil)
   @unpack n_layer, dz, z_water, z_snow, r_rain_g, f_soilwater,
           f_root, w_norm, ice_ratio, θ, θ_prev, Tsoil_p, Tsoil_c,
-          f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
+          f_water, ψ, r_waterflow, inf, Kmid, Kavg, Cv, κ, ETi, G,
           f_temp, w_root, f_stress = soil
 
   StateBEPS(;
@@ -184,7 +186,7 @@ function StateBEPS(soil::Soil)
     r_rain_g, f_soilwater,
     f_root, w_norm, ice_ratio, θ, θ_prev,
     Tsoil_p, Tsoil_c, f_water, ψ,
-    r_waterflow, Kmid, Kavg, Cv, κ,
+    r_waterflow, inf, Kmid, Kavg, Cv, κ,
     ETi, G, f_temp, w_root, f_stress
   )
 end
@@ -193,12 +195,12 @@ end
 function State2Soil!(soil::Soil, st::StateBEPS)
   @unpack z_water, z_snow, r_rain_g, f_soilwater,
           f_root, w_norm, ice_ratio, θ, θ_prev, Tsoil_p, Tsoil_c,
-          f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
+          f_water, ψ, r_waterflow, inf, Kmid, Kavg, Cv, κ, ETi, G,
           f_temp, w_root, f_stress = st
 
   @pack! soil = z_water, z_snow, r_rain_g, f_soilwater,
                 f_root, w_norm, ice_ratio, θ, θ_prev, Tsoil_p, Tsoil_c,
-                f_water, ψ, r_waterflow, Kmid, Kavg, Cv, κ, ETi, G,
+               f_water, ψ, r_waterflow, inf, Kmid, Kavg, Cv, κ, ETi, G,
                 f_temp, w_root, f_stress
   return soil
 end

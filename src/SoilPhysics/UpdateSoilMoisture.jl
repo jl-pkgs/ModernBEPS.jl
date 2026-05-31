@@ -41,6 +41,7 @@ function UpdateSoilMoisture(st::S, ps::P, kstep::Float64;
   # ===== 1. 地表积水与入渗 =====
   update_SoilWaterFrac!(f_water, Tsoil_c; n)
   inf = cal_infiltration(θ, dz, K_sat, θ_sat, ψ_sat, b, f_water[1], z_water, r_rain_g, kstep)
+  st.inf = inf
   inf_ms = inf / 360000.0 # [cm h-1] -> [m s-1]
   st.z_water = (z_water / kstep + r_rain_g - inf_ms) * kstep * r_drainage # Ponded water after runoff
 
