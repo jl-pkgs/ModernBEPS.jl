@@ -5,8 +5,13 @@
 
 # Arguments
 - `forcing`    : `MetSeries`，只使用 `Prcp` 字段 [mm/hr]
+- `dates`      : 时间戳向量（长度应与 `forcing.ntime` 一致）
+- `ps`         : `ParamBEPS`，土壤水参数
+- `state`      : `StateBEPS` 初始状态（函数内部会 `deepcopy`）
 - `ETi_obs`    : 各层蒸散发 [m s-1]，`nlayer × ntime` 矩阵；`nothing` 时全为0
 - `Tsoil_obs`  : 各层土壤温度 [°C]，`nlayer × ntime`；`nothing` 时默认5°C（不冻结）
+- `kstep`      : 子时间步长 [s]
+- `SolveSM_fn` : 土壤水求解器函数，默认 `SolveSM_BEPS`
 
 # Returns
 DataFrame，列：`date`, `z_water`, `inf`, `θ1`…`θn`
@@ -32,10 +37,10 @@ function simulate_soilwater(forcing::MetSeries, dates::AbstractVector;
     if Tsoil_obs !== nothing
       state.Tsoil_c[1:n] .= @view Tsoil_obs[:, i]
     else
-      state.Tsoil_c[1:n] .= 5.0
+      state.Tsoil_c[1:n] .= 5.0 # simplified warm-soil assumption (>0°C) to avoid freezing effects
     end
 
-    r_rain_g_hr = forcing.Prcp[i] / 3600.0 / 1000.0 # [mm/hr] -> [m/s]
+    r_rain_g = forcing.Prcp[i] / 3600.0 / 1000.0 # [mm/hr] -> [m/s]
 
     for _ = 1:kloop
       if ETi_obs !== nothing
@@ -44,7 +49,7 @@ function simulate_soilwater(forcing::MetSeries, dates::AbstractVector;
         state.ETi[1:n] .= 0.0
       end
 
-      state.r_rain_g = r_rain_g_hr
+      state.r_rain_g = r_rain_g
       UpdateSoilMoisture(state, ps, kstep; fix_sm=false, SolveSM_fn)
     end
 

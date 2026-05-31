@@ -14,6 +14,7 @@ function is_soil_equal(p_jl, p_c; tol=1e-7, verbose=false)
   names_skip = [:θb, :ψb, :θ_vfc]
 
   for name_c in names_c
+    @test hasfield(typeof(p_jl), name_c)
     name_c in names_skip && continue
 
     x_jl = getfield(p_jl, name_c)

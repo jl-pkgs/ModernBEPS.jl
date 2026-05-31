@@ -1,5 +1,7 @@
 using BEPS, Test, Dates, DataFrames
 
+_sm_varname(depth_m) = Symbol("SM_$(Int(depth_m * 100))cm")
+
 @testset "soilwater standalone + calibration helpers" begin
   ntime = 6
   forcing = MetSeries{Float64}(; ntime)
@@ -23,8 +25,10 @@ using BEPS, Test, Dates, DataFrames
   @test "inf" in names(df_pred)
 
   depths_SM = Float64[0.05, 0.15, 0.30, 0.60, 1.0]
-  vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i] * 100))cm"), eachindex(depths_SM))
-  SM_sim_mat = hcat([df_pred[!, Symbol("θ$j")] for j in 1:Int(model.N)]...)
+  vars_SM = map(_sm_varname, depths_SM)
+  nlayer = Int(model.N)
+  θ_cols = [Symbol(:θ, j) for j in 1:nlayer]
+  SM_sim_mat = hcat([df_pred[!, c] for c in θ_cols]...)
   SM_sim = interp_depths(SM_sim_mat, depths_SM)
   SM_obs = DataFrame()
   for j in eachindex(vars_SM)

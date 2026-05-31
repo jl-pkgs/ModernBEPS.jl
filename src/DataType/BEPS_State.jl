@@ -163,6 +163,7 @@ end
 
 const VARS_SCALAR = Tuple(
     f for (f, T) in zip(fieldnames(StateBEPS), fieldtypes(StateBEPS))
+    # `inf` is kept on state/soil structs for diagnostics, but excluded from generic scalar exports.
     if T <: AbstractFloat && f ∉ (:Qhc_o, :inf)
 )
 

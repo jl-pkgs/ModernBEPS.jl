@@ -129,18 +129,23 @@ function BEPS_GOF(df_fluxes, states, dates_hour, FluxALL; depths_SM, depths_TS)
   gof, data_sim, data_obs
 end
 
-_hydraulic_name_map(sym::Symbol) = sym === :K_sat ? :Ksat : sym
+# ModelParams path uses `Ksat`; user-facing BEPS docs often use `K_sat`.
+_normalize_ksat_name(sym::Symbol) = sym === :K_sat ? :Ksat : sym
+_sm_varname(depth_m) = Symbol("SM_$(Int(depth_m * 100))cm")
 
 function _normalize_paths_soilwater(model::ParamBEPS, paths)
   N = Int(model.N)
   out = Vector{Vector{Any}}()
+  hydraulic_profile_fields = Set((:θ_sat, :θ_res, :ψ_sat, :Ksat, :b))
 
   for path in paths
     if path isa Tuple
       if length(path) == 1
         push!(out, Any[path[1]])
       elseif length(path) == 2 && path[1] === :hydraulic
-        field = _hydraulic_name_map(path[2])
+        field = _normalize_ksat_name(path[2])
+        field in hydraulic_profile_fields ||
+          throw(ArgumentError("Unsupported hydraulic shorthand path $path; only profile fields are supported."))
         for i in 1:N
           push!(out, Any[:hydraulic, :profile, field, i])
         end
@@ -199,11 +204,12 @@ function goodness_soilwater(theta::Vector{FT}, model::ParamBEPS{FT},
   df_sim = predict_soilwater(theta, model, forcing, dates;
     paths, ETi_obs, Tsoil_obs, SolveSM_fn)
 
-  vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i]*100))cm"), eachindex(depths_SM))
+  vars_SM = map(_sm_varname, depths_SM)
   n = length(depths_SM)
   nlayer = Int(model.N)
+  θ_cols = [Symbol(:θ, j) for j in 1:nlayer]
 
-  SM_sim_mat = hcat([df_sim[!, Symbol("θ$j")] for j in 1:nlayer]...)
+  SM_sim_mat = hcat([df_sim[!, c] for c in θ_cols]...)
   SM_sim = interp_depths(SM_sim_mat, depths_SM)
 
   gof = map(1:n) do j
@@ -248,7 +254,7 @@ function optim_soilwater(model::ParamBEPS{FT}, forcing::MetSeries{FT},
   ub = map(x -> FT(x[2]), params.bound)
   u0 = params.value
 
-  theta, feval, exitflag = sceua(_loss, u0, lb, ub; maxn, verbose=true, parallel=true)
+  theta, _, _ = sceua(_loss, u0, lb, ub; maxn, verbose=true, parallel=true)
   theta
 end
 
