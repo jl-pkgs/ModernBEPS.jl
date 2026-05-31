@@ -16,10 +16,12 @@ using BEPS, Test, Dates, DataFrames
   model = ParamBEPS(25, 8)
   state = InitState0(model, forcing)
 
-  θ1_obs = fill(model.hydraulic.θ_sat[1] * 1.2, ntime)
+  θ1_obs = fill(model.hydraulic.θ_sat[1] * 0.8, ntime)
+  θ1_obs[end] = model.hydraulic.θ_sat[1] * 1.2
   df = simulate_soilwater(forcing, dates; ps=model, state, θ1_obs)
   @test size(df, 1) == ntime
-  @test all(df[!, :θ1] .≈ model.hydraulic.θ_sat[1])
+  @test all(df[1:end-1, :θ1] .≈ θ1_obs[1:end-1])
+  @test df[end, :θ1] ≈ model.hydraulic.θ_sat[1]
 
   depths_SM = [0.15, 0.30, 0.60, 1.0]
   vars_SM = map(d -> Symbol("SM_$(Int(d * 100))cm"), depths_SM)

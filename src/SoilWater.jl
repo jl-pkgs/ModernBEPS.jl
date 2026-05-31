@@ -17,9 +17,12 @@ function simulate_soilwater(forcing::MetSeries, dates::AbstractVector;
   n = Int(state.n_layer)
   kloop = round(Int, 3600.0 / kstep)
 
-  ETi_obs !== nothing && size(ETi_obs, 2) != ntime && error("size(ETi_obs,2) must equal forcing.ntime")
-  Tsoil_obs !== nothing && size(Tsoil_obs, 2) != ntime && error("size(Tsoil_obs,2) must equal forcing.ntime")
-  θ1_obs !== nothing && length(θ1_obs) != ntime && error("length(θ1_obs) must equal forcing.ntime")
+  ETi_obs !== nothing && size(ETi_obs, 2) != ntime &&
+    error("ETi_obs dimension mismatch: expected $ntime columns, got $(size(ETi_obs, 2))")
+  Tsoil_obs !== nothing && size(Tsoil_obs, 2) != ntime &&
+    error("Tsoil_obs dimension mismatch: expected $ntime columns, got $(size(Tsoil_obs, 2))")
+  θ1_obs !== nothing && length(θ1_obs) != ntime &&
+    error("θ1_obs length mismatch: expected $ntime, got $(length(θ1_obs))")
 
   θ_out = zeros(Float64, ntime, n)
   z_water = zeros(Float64, ntime)

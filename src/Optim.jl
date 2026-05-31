@@ -174,7 +174,9 @@ function goodness_soilwater_θ1(theta::Vector{FT}, model::ParamBEPS{FT},
   vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i] * 100))cm"), eachindex(depths_SM))
   n = length(depths_SM)
 
-  SM_sim_mat = hcat([df_sim[!, Symbol("θ$j")] for j in 1:5]...) # ntime × 5
+  θ_cols = filter(name -> startswith(String(name), "θ"), propertynames(df_sim))
+  sort!(θ_cols; by=name -> parse(Int, replace(String(name), "θ" => "")))
+  SM_sim_mat = hcat([df_sim[!, col] for col in θ_cols]...) # ntime × nlayer
   SM_sim = interp_depths(FT.(SM_sim_mat), depths_SM) # ntime × n
 
   gof = map(1:n) do j
