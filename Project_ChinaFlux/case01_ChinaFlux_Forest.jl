@@ -9,6 +9,7 @@ st_full = fread("$indir/data/st_flux12.csv")
 
 f = "$indir/data-raw/BEPS/Forcing_Met_Hourly_BEPS_Forest_sp12_hourly_v20260507.csv"
 @time FORCING = fread("$indir/data-raw/BEPS/Forcing_Met_Hourly_BEPS_Forest_sp12_hourly_v20260507.csv")
+
 replace_missing!(FORCING)
 SITES_bad = ["MF_乔灌混交林_燕山"]
 SITES = setdiff(unique(FORCING.site), SITES_bad)
