@@ -80,8 +80,8 @@ function BEPS_GOF(df_fluxes, states, dates_hour, FluxALL; depths_SM, depths_TS)
   normalize_flux_obs!(FluxALL)
   obs_dates = _daily_obs_dates(FluxALL)
   (; lai, GPP_obs, ET_obs, Hs_obs) = FluxALL
-  vars_TS = map(i -> Symbol("TS_$(Int(depths_TS[i] * 100))cm"), eachindex(depths_TS))
-  vars_SM = map(i -> Symbol("SM_$(Int(depths_SM[i] * 100))cm"), eachindex(depths_SM))
+  vars_TS = map(i -> Symbol("TS_$(Int(round(depths_TS[i] * 100)))cm"), eachindex(depths_TS))
+  vars_SM = map(i -> Symbol("SM_$(Int(round(depths_SM[i] * 100)))cm"), eachindex(depths_SM))
   TS_obs = FluxALL[:, vars_TS] |> Matrix
   SM_obs = FluxALL[:, vars_SM] |> Matrix
 
