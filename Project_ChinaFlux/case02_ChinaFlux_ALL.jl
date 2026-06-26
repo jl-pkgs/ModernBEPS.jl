@@ -11,8 +11,16 @@ f = "$indir/data/BEPS/Forcing_Hourly_Met_sp31_v20260614.csv"
 @time FORCING = fread("$indir/data/BEPS/Forcing_Hourly_Met_sp31_v20260614.csv")
 
 replace_missing!(FORCING)
-SITES_bad = String[]                                   # 按运行结果再补充异常站
+SITES_bad = ["CRO_制种玉米_临泽"]          s             # 无降雨驱动(P=0)，先跳过（见 Plan/TODO.md）
 SITES = setdiff(unique(FORCING.site), SITES_bad)        # 驱动文件即 31 站的权威清单
+
+# 逐站小时降雨校正：部分站点小时 Prcp 疑似多计（累计窗口/单位），按日累计标定缩放
+# （比值见 Plan/TODO.md A 组；不改原始数据，仅在读入时校正）
+PRCP_SCALE = Dict(
+  "CRO_冬小麦夏玉米_固城" => 1 / 29.1,  # h_max 430mm/hr，年 15791mm → ~543mm
+  "CRO_水稻_盘锦" => 1 / 2.0,           # 小时为日累计的 2 倍
+  "CRO_水稻_句容" => 1 / 4.5,           # 小时为日累计的 4~5 倍
+)
 
 
 # 鲁棒列处理：仅重命名存在的列；保证列为 Float64（缺测→NaN），整列不存在→全 NaN
@@ -45,6 +53,7 @@ function LoadData(SITE)
   i_beg = findfirst(t -> Date(parse_time(t)) == FluxALL.date[1], d_forcing.time)
   isnothing(i_beg) && error("forcing 不含观测首日 $(FluxALL.date[1])")
   d_forcing = d_forcing[i_beg:min(i_beg + ntime2 - 1, end), :]
+  haskey(PRCP_SCALE, SITE) && (d_forcing.Prcp .*= PRCP_SCALE[SITE])  # 逐站降雨校正
   clean_stats = sanitize_forcing!(d_forcing)
   @info "Forcing quality control" clean_stats
   (; Tair, RH, Uz, Rs, Rln_in, Prcp) = d_forcing
@@ -64,6 +73,7 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
   (isfile(fout) && !overwrite) && return
 
   printstyled("[site]: $SITE\n", color=:blue, bold=true, underline=true)
+  t_beg = time()  # 记录单站运行时长（主要由 optim 决定），存入结果
 
   # 率定所需数据
   dates_local, forcing, lai, FluxALL = LoadData(SITE)
@@ -118,7 +128,8 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
   opts.theta_opt = theta_opt
   gof_opt, data_sim, data_obs = goodness(theta_opt, model, forcing, lai, dates_UTC; paths, kw_loss...)
 
-  jldsave(fout; gof_opt, gof, theta_opt, data_sim, data_obs)
+  runtime = round(time() - t_beg, digits=1)  # [秒]
+  jldsave(fout; gof_opt, gof, theta_opt, data_sim, data_obs, runtime)
   gof_opt
 end
 
