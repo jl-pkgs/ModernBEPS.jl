@@ -3,16 +3,40 @@ using BEPS, RTableTools, DataFrames, Dates, ModelParams, Ipaper
 using JLD2
 FT = Float64
 
-indir = "z:/GitHub/jl-pkgs/ChinaFlux2026" |> path_mnt
+indir = "/mnt/z/GitHub/jl-pkgs/ChinaFlux2026"
 st_full = fread("$indir/data/Metadata/ChinaFlux_Metadata.csv")  # 39 站元数据，含 31 站全部
 
 
-f = "$indir/data/BEPS/Forcing_Hourly_Met_sp31_v20260614.csv"
-@time FORCING = fread("$indir/data/BEPS/Forcing_Hourly_Met_sp31_v20260614.csv")
-
+f = "/mnt/z/China/CMFD_V2.0/OUTPUT/ChinaFlux_sp38_final_forcing_1h.csv"
+@time FORCING = fread(f)
 replace_missing!(FORCING)
-SITES_bad = ["CRO_制种玉米_临泽"]        # 无降雨驱动(P=0)，先跳过（见 Plan/TODO.md）
-SITES = setdiff(unique(FORCING.site), SITES_bad)        # 驱动文件即 31 站的权威清单
+rename_existing!(d, pairs) = rename!(d, filter(p -> first(p) in propertynames(d), pairs))
+rename_existing!(FORCING, [
+  :datetime => :time,
+  :Temp => :Tair,
+  :RHum => :RH,
+  :Wind => :Uz,
+  :SRad => :Rs,
+  :LRad => :Rln_in,
+  :Prec => :Prcp,
+])
+
+flux_files = filter(f -> endswith(f, "_Daily_FluxALL_v20260615.csv"),
+  readdir("$indir/data/BEPS/Daily_FluxALL"))
+SITES_obs = replace.(flux_files, "_Daily_FluxALL_v20260615.csv" => "")
+SITES = sort(intersect(unique(FORCING.site), SITES_obs))
+SITES_missing_obs = sort(setdiff(unique(FORCING.site), SITES_obs))
+SITES_missing_forcing = sort(setdiff(SITES_obs, unique(FORCING.site)))
+isempty(SITES_missing_obs) || @warn "CMFD forcing sites without matching FluxALL daily file" SITES_missing_obs
+isempty(SITES_missing_forcing) || @warn "FluxALL daily sites without matching CMFD forcing" SITES_missing_forcing
+if haskey(ENV, "BEPS_SITES")
+  SITES_requested = strip.(split(ENV["BEPS_SITES"], ","))
+  SITES = intersect(SITES, SITES_requested)
+  isempty(SITES) && error("BEPS_SITES 与可运行站点无交集")
+end
+env_bool(name, default=false) = lowercase(get(ENV, name, string(default))) in ("1", "true", "yes", "y")
+MAXN = parse(Int, get(ENV, "BEPS_MAXN", "1000"))
+OVERWRITE = env_bool("BEPS_OVERWRITE")
 
 # PRCP_SCALE = Dict(
 #   "CRO_冬小麦夏玉米_固城" => 1 / 29.1,  # h_max 430mm/hr，年 15791mm → ~543mm
@@ -22,11 +46,13 @@ SITES = setdiff(unique(FORCING.site), SITES_bad)        # 驱动文件即 31 站
 
 
 # 鲁棒列处理：仅重命名存在的列；保证列为 Float64（缺测→NaN），整列不存在→全 NaN
-rename_existing!(d, pairs) = rename!(d, filter(p -> first(p) in propertynames(d), pairs))
 # 元数据为手工维护：含 "NA" 等会把整列读成 String，统一转数值（不可解析→missing）
 asnum(x) = x isa Number ? Float64(x) : (x isa AbstractString ? something(tryparse(Float64, x), missing) : missing)
 ascol!(d, col) = d[!, col] = (col in propertynames(d)) ?
                              Float64.(coalesce.(d[!, col], NaN)) : fill(NaN, nrow(d))
+cmfd_time(t::DateTime) = t
+cmfd_time(t) = DateTime(first(String(t), 19), dateformat"yyyy-mm-ddTHH:MM:SS")
+cmfd_local_time(t) = cmfd_time(t) + Hour(8)
 
 
 ##
@@ -44,11 +70,11 @@ function LoadData(SITE)
   (; lai) = FluxALL
   ntime2 = length(lai) * 24
 
-  d_forcing = FORCING[FORCING.site.==SITE, 2:end]
-  rename!(d_forcing, [:Ta_canopy => :Tair, :RH_canopy => :RH, :WS_canopy => :Uz])
+  d_forcing = FORCING[FORCING.site.==SITE, :]
+  sort!(d_forcing, :time)
 
   # 驱动可能比观测更早开始/更长（数据本身如此）：对齐到观测首日，再裁剪到观测长度
-  i_beg = findfirst(t -> Date(parse_time(t)) == FluxALL.date[1], d_forcing.time)
+  i_beg = findfirst(t -> Date(cmfd_local_time(t)) == FluxALL.date[1], d_forcing.time)
   isnothing(i_beg) && error("forcing 不含观测首日 $(FluxALL.date[1])")
   d_forcing = d_forcing[i_beg:min(i_beg + ntime2 - 1, end), :]
   # 降水异常已在上游数据修复，无需再按站缩放（保留以备回退）：
@@ -58,13 +84,13 @@ function LoadData(SITE)
   (; Tair, RH, Uz, Rs, Rln_in, Prcp) = d_forcing
   ntime = length(Tair)
   forcing = MetSeries(; ntime, Rs, Rln_in, Tair, RH, Uz, Prcp)
-  dates_local = parse_time.(d_forcing.time)
+  dates_local = cmfd_local_time.(d_forcing.time)
 
   dates_local, forcing, lai, FluxALL
 end
 
 
-function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE", overwrite=false,
+function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h", overwrite=false,
   goal=:NSE, goal_multiplier=-1, SolveSM_fn=SolveSM_Bonan)
 
   mkpath(outdir)
@@ -87,7 +113,8 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
   SoilType = ismissing(SoilType) ? "loam" : SoilType    # 元数据缺失兜底
 
   # 元数据 z_SM/z_TS 可能缺失；缺失→不评价土壤
-  parse_depths(s) = ismissing(s) ? Float64[] : map(x -> parse(Int, strip(x)), split(s, ",")) ./ 100
+  parse_depths(s) = (ismissing(s) || isempty(strip(String(s)))) ?
+                    Float64[] : map(x -> parse(Int, strip(x)), split(String(s), ",")) ./ 100
   depths_SM = parse_depths(st.z_SM)
   depths_TS = parse_depths(st.z_TS)
 
@@ -135,13 +162,14 @@ end
 
 
 errors = Tuple{String,String}[]
-outdir = "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE"
+outdir = "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h"
 for i in eachindex(SITES)
   !isCurrentWorker(i) && continue
 
   SITE = SITES[i]
   try
-    RunModel(SITE; maxn=1000, outdir, goal=:NSE, goal_multiplier=-1, SolveSM_fn=SolveSM_Bonan)
+    RunModel(SITE; maxn=MAXN, outdir, goal=:NSE, goal_multiplier=-1,
+      SolveSM_fn=SolveSM_Bonan, overwrite=OVERWRITE)
   catch ex
     msg = sprint(showerror, ex)
     @error "Error processing site $SITE: $msg"
@@ -157,8 +185,7 @@ end
 
 
 ## 差站重跑（overwrite=true）
-# 分级标记为「差」的站点（见 Plan/Report_China_FluxALL.typ §3）：降水校正 / 参数更新后强制重算。
-# 临泽 P=0 无降水驱动，已在 SITES_bad 跳过，不在此列。
+# 分级标记为「差」的站点（见 Plan/Report_China_FluxALL.typ §3）：使用 CMFD 强制重算。
 SITES_poor = [
   "CRO_冬小麦夏玉米_固城",
   "CRO_水稻_盘锦",
@@ -167,11 +194,12 @@ SITES_poor = [
   "GRA_高寒草甸_若尔盖",
   "GRA_人工垂穗披碱草_三江源",
 ]
-for i in eachindex(SITES_poor)
+SITES_poor_run = intersect(SITES_poor, SITES)
+for i in eachindex(SITES_poor_run)
   !isCurrentWorker(i) && continue
-  SITE = SITES_poor[i]
+  SITE = SITES_poor_run[i]
   try
-    RunModel(SITE; maxn=1000, outdir, goal=:NSE, goal_multiplier=-1,
+    RunModel(SITE; maxn=MAXN, outdir, goal=:NSE, goal_multiplier=-1,
       SolveSM_fn=SolveSM_Bonan, overwrite=true)
   catch ex
     @error "Error processing site $SITE: $(sprint(showerror, ex))"

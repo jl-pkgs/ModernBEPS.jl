@@ -1,8 +1,10 @@
 ## 汇总已完成站点的拟合优度（优化前 gof / 优化后 gof_opt）
-## 用法: julia --project Project_ChinaFlux/summary_GOF.jl
+## 用法:
+##   julia --project Project_ChinaFlux/Plan/summary_GOF.jl
+##   julia --project Project_ChinaFlux/Plan/summary_GOF.jl Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h
 using JLD2, DataFrames, RTableTools, Printf
 
-dir = "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE"
+dir = isempty(ARGS) ? "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE" : ARGS[1]
 files = sort(filter(f -> startswith(basename(f), "BEPS_") && endswith(f, ".jld2"),
   readdir(dir; join=true)))
 
