@@ -10,7 +10,7 @@ files = sort(filter(f -> startswith(basename(f), "BEPS_") && endswith(f, ".jld2"
 
 # 取某指标 DataFrame 中某变量的一行（R² 列名兼容 :R2 / :R²）
 getval(r, k) = hasproperty(r, k) ? getproperty(r, k) : NaN
-# GPP/ET 缺测时 GOF 返回 -999 哨兵（有效样本 ≤ 2）或 NaN（序列退化）；汇总成表时统一转 NA（missing），避免误读为有效精度
+# GPP/ET 缺测时 GOF 返回 -999 异常（有效样本 ≤ 2）或 NaN（序列退化）；汇总成表时统一转 NA（missing），避免误读为有效精度
 na(x) = (ismissing(x) || (x isa Real && (isnan(x) || x == -999.0))) ? missing : x
 function gofrow(g, var)
   i = findfirst(==(var), g.var)
