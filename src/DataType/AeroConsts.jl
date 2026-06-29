@@ -11,6 +11,25 @@
   Le_cuberoot::T = 1.0   # cached (lai_o * clumping)^(1/3) for overstory attenuation
 end
 
+
+"""
+    safe_wind_ref(z_wind, h; d_frac=0.8, z0m_frac=0.08, n_above=4.0)
+
+确保风速参考高度高于 `d + n_above*z0m`，避免
+`log((z - d) / z0m)` 非法或分母过小。
+
+若原始高度不足，仅抬升参考高度，不改变风速值。
+返回 `(z_eff, adjusted)`。
+
+https://chatgpt.com/c/6a41e554-b11c-83ee-a81c-2ff537aeb0a7
+"""
+function safe_wind_ref(z_wind::T, h::T; d_frac::T=0.8, z0m_frac::T=0.08, n_above::T=4.0) where {T}
+  d = d_frac * h
+  z0m = z0m_frac * h
+  z_safe = d + n_above * z0m
+  z_wind >= z_safe ? (z_wind, false) : (z_safe, true)
+end
+
 pow_075(x::T) where {T<:Real} = x^0.75
 cuberoot(x::T) where {T<:Real} = x^(1.0 / 3.0)
 
@@ -61,7 +80,9 @@ function aero_exp_terms(canopy_height_o::T, canopy_height_u::T, z_wind::T, clump
   d = 0.8 * canopy_height_o
   # roughness length (m)
   z0 = 0.08 * canopy_height_o
-  log_zh_z0 = log((z_wind - d) / z0)
+  # 确保参考高度在 d+z0 之上（再分析10m风 + 高冠层时 d > z_wind，log(负值) → DomainError）
+  z_eff, _ = safe_wind_ref(z_wind, canopy_height_o; d_frac=T(0.8), z0m_frac=T(0.08))
+  log_zh_z0 = log((z_eff - d) / z0)
   ustar = wind_sp * k / log_zh_z0 # friction velocity (m/s)
   coef_L = -(k * g) / (density_air * cp * (Tair + 273.3) * ustar^3)
 
@@ -113,7 +134,8 @@ function ra_updateH(SH_o_p::FT, z_wind, canopy_height_o::FT, canopy_height_u::FT
   n = FT(5.0)
   d = 0.8 * canopy_height_o
   z0 = 0.08 * canopy_height_o
-  zh = z_wind - d
+  z_eff, _ = safe_wind_ref(z_wind, canopy_height_o; d_frac=FT(0.8), z0m_frac=FT(0.08))
+  zh = z_eff - d
   log_zh_z0 = log(zh / z0)
 
   k = 0.4

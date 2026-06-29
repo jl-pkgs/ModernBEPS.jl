@@ -46,18 +46,20 @@ function aerodynamic_conductance_jl(canopy_height_o::FT, canopy_height_u::FT,
   else
     d::FT = 0.8 * canopy_height_o  # displacement height (m)
     z0::FT = 0.08 * canopy_height_o # roughness length (m)
+    # 确保参考高度在 d+z0 之上（再分析10m风 + 高冠层保护）
+    z_eff, _ = safe_wind_ref(z_wind, canopy_height_o; d_frac=FT(0.8), z0m_frac=FT(0.08))
 
-    ustar::FT = wind_sp * k / log((z_wind - d) / z0) # friction velocity (m/s)
+    ustar::FT = wind_sp * k / log((z_eff - d) / z0) # friction velocity (m/s)
     L::FT = -(k * gg * SH_o_p) / (density_air * cp * (Tair + 273.3) * ustar^3)
     L = max(-2.0, L)
 
-    ra_o::FT = 1 / (k * ustar) * (log((z_wind - d) / z0) + (n * (z_wind - d) * L))
+    ra_o::FT = 1 / (k * ustar) * (log((z_eff - d) / z0) + (n * (z_eff - d) * L))
     ra_o = clamp(ra_o, 2, 100)
     
     if L > 0
-      ψ = 1 + 5 * (z_wind - d) * L
+      ψ = 1 + 5 * (z_eff - d) * L
     else
-      ψ = (1 - 16 * (z_wind - d) * L)^(-0.5)
+      ψ = (1 - 16 * (z_eff - d) * L)^(-0.5)
     end
     ψ = min(10.0, ψ)
 

@@ -65,15 +65,18 @@ function aerodynamic_conductance_jl(h::FT, h_u::FT, z_wind::FT, clumping::FT,
   z0m::FT = 0.08 * h  # momentum roughness length; ≈0.1h (Chen 1999)
   z0h::FT = 0.1 * z0m               # heat roughness length; kB⁻¹ ≈ 2.3
 
-  ustar::FT = u * k / log((z_wind - d) / z0m) # TODO: Ψ_m is ignored here, friction velocity (m/s)
+  # 确保参考高度在 d+z0m 之上（再分析10m风 + 高冠层保护）
+  z_eff, _ = safe_wind_ref(z_wind, h; d_frac=FT(0.8), z0m_frac=FT(0.08))
+
+  ustar::FT = u * k / log((z_eff - d) / z0m) # TODO: Ψ_m is ignored here, friction velocity (m/s)
 
   L::FT = -(ρ_air * cp * (Tair + 273.3) * ustar^3) / (k * g * H)
   L = clamp(L, -1e6, 1e6)  # guard against H≈0
-  ξ::FT = clamp((z_wind - d) / L, -2.0, 1.0)  # Bonan Figure 6.3
+  ξ::FT = clamp((z_eff - d) / L, -2.0, 1.0)  # Bonan Figure 6.3
 
   Ψ_h = cal_Ψh(ξ, L)
 
-  ra_o::FT = 1 / (k * ustar) * (log((z_wind - d) / z0h) - Ψ_h)
+  ra_o::FT = 1 / (k * ustar) * (log((z_eff - d) / z0h) - Ψ_h)
   ra_o = clamp(ra_o, 2.0, 500.0)
 
   # Bonan 2019, Eq 6.38
