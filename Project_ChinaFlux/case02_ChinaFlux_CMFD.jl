@@ -1,13 +1,24 @@
 ## 1. 读取驱动数据
-using BEPS, RTableTools, DataFrames, Dates, ModelParams, Ipaper
-using JLD2
+using BEPS, RTableTools, DataFrames, Dates, ModelParams, Ipaper, JLD2
 FT = Float64
 
+cmfd_time(t::DateTime) = t
+cmfd_time(t) = DateTime(first(String(t), 19), dateformat"yyyy-mm-ddTHH:MM:SS")
+cmfd_local_time(t) = cmfd_time(t) + Hour(8)
+
+# 元数据为手工维护：含 "NA" 等会把整列读成 String，统一转数值（不可解析→missing）
+as_num(x) = x isa Number ? Float64(x) : (x isa AbstractString ? something(tryparse(Float64, x), missing) : missing)
+
+env_bool(name, default=false) = lowercase(get(ENV, name, string(default))) in ("1", "true", "yes", "y")
+OVERWRITE = env_bool("BEPS_OVERWRITE")
+MAXN = parse(Int, get(ENV, "BEPS_MAXN", "1000"))
+
+##
+outdir = "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h_V4"
 indir = "/mnt/z/GitHub/jl-pkgs/ChinaFlux2026"
 st_full = fread("$indir/data/Metadata/ChinaFlux_Metadata.csv")  # 39 站元数据，含 31 站全部
 
-
-f = "/mnt/z/China/CMFD_V2.0/OUTPUT/ChinaFlux_sp38_final_forcing_1h.csv"
+f = "/mnt/z/China/CMFD_V2.0/OUTPUT/ChinaFlux/ChinaFlux_sp38_final_forcing_1h.csv"
 @time FORCING = fread(f)
 replace_missing!(FORCING)
 rename_existing!(d, pairs) = rename!(d, filter(p -> first(p) in propertynames(d), pairs))
@@ -25,35 +36,30 @@ flux_files = filter(f -> endswith(f, "_Daily_FluxALL_v20260615.csv"),
   readdir("$indir/data/BEPS/Daily_FluxALL"))
 SITES_obs = replace.(flux_files, "_Daily_FluxALL_v20260615.csv" => "")
 SITES = sort(intersect(unique(FORCING.site), SITES_obs))
-SITES_missing_obs = sort(setdiff(unique(FORCING.site), SITES_obs))
-SITES_missing_forcing = sort(setdiff(SITES_obs, unique(FORCING.site)))
-isempty(SITES_missing_obs) || @warn "CMFD forcing sites without matching FluxALL daily file" SITES_missing_obs
-isempty(SITES_missing_forcing) || @warn "FluxALL daily sites without matching CMFD forcing" SITES_missing_forcing
+
+miss_f = setdiff(unique(FORCING.site), SITES_obs)   # forcing 有、观测无
+miss_o = setdiff(SITES_obs, unique(FORCING.site))   # 观测有、forcing 无
+isempty(miss_f) || @warn "CMFD forcing without daily obs" miss_f
+isempty(miss_o) || @warn "Daily obs without CMFD forcing" miss_o
+
 if haskey(ENV, "BEPS_SITES")
-  SITES_requested = strip.(split(ENV["BEPS_SITES"], ","))
-  SITES = intersect(SITES, SITES_requested)
-  isempty(SITES) && error("BEPS_SITES 与可运行站点无交集")
+  SITES = intersect(SITES, strip.(split(ENV["BEPS_SITES"], ",")))
+  isempty(SITES) && error("BEPS_SITES 无交集")
 end
-env_bool(name, default=false) = lowercase(get(ENV, name, string(default))) in ("1", "true", "yes", "y")
-MAXN = parse(Int, get(ENV, "BEPS_MAXN", "1000"))
-OVERWRITE = env_bool("BEPS_OVERWRITE")
 
-# PRCP_SCALE = Dict(
-#   "CRO_冬小麦夏玉米_固城" => 1 / 29.1,  # h_max 430mm/hr，年 15791mm → ~543mm
-#   "CRO_水稻_盘锦" => 1 / 2.0,           # 小时为日累计的 2 倍
-#   "CRO_水稻_句容" => 1 / 4.5,           # 小时为日累计的 4~5 倍
-# )
+# V3: 仅重跑冠层高度 > 10m 的站点（之前的 safe_wind_ref 处理有误）
+h_overs = Dict(r.site => as_num(r.z_overstory) for r in eachrow(st_full) if !ismissing(as_num(r.z_overstory)))
 
+# SITES = intersect(SITES, [s for (s, h) in h_overs if h > 10])
+# @info "Tall canopy sites (h > 10m) to rerun" SITES
+
+# V4: 仅重跑冠层高度 < 10m 的站点，不使用 Rln_in（模型用气温估算长波辐射）
+SITES = intersect(SITES, [s for (s, h) in h_overs if h < 10])
+@info "Short canopy sites (h < 10m, no Rln_in) to rerun" SITES
 
 # 鲁棒列处理：仅重命名存在的列；保证列为 Float64（缺测→NaN），整列不存在→全 NaN
-# 元数据为手工维护：含 "NA" 等会把整列读成 String，统一转数值（不可解析→missing）
-asnum(x) = x isa Number ? Float64(x) : (x isa AbstractString ? something(tryparse(Float64, x), missing) : missing)
 ascol!(d, col) = d[!, col] = (col in propertynames(d)) ?
                              Float64.(coalesce.(d[!, col], NaN)) : fill(NaN, nrow(d))
-cmfd_time(t::DateTime) = t
-cmfd_time(t) = DateTime(first(String(t), 19), dateformat"yyyy-mm-ddTHH:MM:SS")
-cmfd_local_time(t) = cmfd_time(t) + Hour(8)
-
 
 ##
 function LoadData(SITE)
@@ -77,11 +83,13 @@ function LoadData(SITE)
   i_beg = findfirst(t -> Date(cmfd_local_time(t)) == FluxALL.date[1], d_forcing.time)
   isnothing(i_beg) && error("forcing 不含观测首日 $(FluxALL.date[1])")
   d_forcing = d_forcing[i_beg:min(i_beg + ntime2 - 1, end), :]
-  # 降水异常已在上游数据修复，无需再按站缩放（保留以备回退）：
-  # haskey(PRCP_SCALE, SITE) && (d_forcing.Prcp .*= PRCP_SCALE[SITE])  # 逐站降雨校正
+
   clean_stats = sanitize_forcing!(d_forcing)
   @info "Forcing quality control" clean_stats
   (; Tair, RH, Uz, Rs, Rln_in, Prcp) = d_forcing
+
+  # V4: 不使用 CMFD 长波辐射，令模型用 cal_Rln(ϵ_air, Tair) 估算（netRadiation.jl:190）
+  Rln_in = fill(NaN, length(Tair))
   ntime = length(Tair)
   forcing = MetSeries(; ntime, Rs, Rln_in, Tair, RH, Uz, Prcp)
   dates_local = cmfd_local_time.(d_forcing.time)
@@ -90,7 +98,7 @@ function LoadData(SITE)
 end
 
 
-function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h", overwrite=false,
+function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h_V4", overwrite=false,
   goal=:NSE, goal_multiplier=-1, SolveSM_fn=SolveSM_Bonan)
 
   mkpath(outdir)
@@ -109,7 +117,7 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
   isnothing(i_st) && error("missing metadata: $SITE")
   st = st_full[i_st, :]
   (; lon, lat, VegType, SoilType) = st
-  z_Uz, z_overstory = asnum(st.z_Uz), asnum(st.z_overstory)  # 元数据手工维护，统一转数值
+  z_Uz, z_overstory = as_num(st.z_Uz), as_num(st.z_overstory)  # 元数据手工维护，统一转数值
   SoilType = ismissing(SoilType) ? "loam" : SoilType    # 元数据缺失兜底
 
   # 元数据 z_SM/z_TS 可能缺失；缺失→不评价土壤
@@ -128,8 +136,10 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
   depths_TS = filter(d -> has_obs("TS", d), depths_TS)
 
   model = ParamBEPS(VegType, SoilType)
-  ismissing(z_Uz) || (model.veg.z_wind = z_Uz)          # z 高度缺失→保留模型默认
   ismissing(z_overstory) || (model.veg.z_canopy_o = z_overstory)
+  # CMFD 风速实测高度为 10 m。src 中 safe_wind_ref 自动处理高冠层的参考高度抬升，
+  # 无需调用方手动外推风速。
+  model.veg.z_wind = 10.0
 
   state = InitState0(model, forcing)
   @time df_fluxes, df_ET, states, caches = simulate(forcing, lai, dates_UTC;
@@ -160,32 +170,28 @@ function RunModel(SITE; maxn=1000, outdir="Project_ChinaFlux/OUTPUT/ALL/Bonan/NS
 end
 
 
+function Process(SITES)
+  errors = Tuple{String,String}[]
+  for i in eachindex(SITES)
+    !isCurrentWorker(i) && continue
 
-errors = Tuple{String,String}[]
-outdir = "Project_ChinaFlux/OUTPUT/ALL/Bonan/NSE_CMFD_1h"
-for i in eachindex(SITES)
-  !isCurrentWorker(i) && continue
+    SITE = SITES[i]
+    try
+      RunModel(SITE; maxn=MAXN, outdir, goal=:NSE, goal_multiplier=-1,
+        SolveSM_fn=SolveSM_Bonan, overwrite=OVERWRITE)
+    catch ex
+      msg = sprint(showerror, ex)
+      @error "Error processing site $SITE: $msg"
+      push!(errors, (SITE, msg))
+    end
+  end
 
-  SITE = SITES[i]
-  try
-    RunModel(SITE; maxn=MAXN, outdir, goal=:NSE, goal_multiplier=-1,
-      SolveSM_fn=SolveSM_Bonan, overwrite=OVERWRITE)
-  catch ex
-    msg = sprint(showerror, ex)
-    @error "Error processing site $SITE: $msg"
-    push!(errors, (SITE, msg))
+  if !isempty(errors)
+    @warn "以下站点运行失败" errors
+    fwrite(DataFrame(site=first.(errors), error=last.(errors)), "$outdir/_errors.csv")
   end
 end
 
-# 错误清单：便于「全部跑完后」按站定位问题
-if !isempty(errors)
-  @warn "以下站点运行失败" errors
-  fwrite(DataFrame(site=first.(errors), error=last.(errors)), "$outdir/_errors.csv")
-end
-
-
-## 差站重跑（overwrite=true）
-# 分级标记为「差」的站点（见 Plan/Report_China_FluxALL.typ §3）：使用 CMFD 强制重算。
 SITES_poor = [
   "CRO_冬小麦夏玉米_固城",
   "CRO_水稻_盘锦",
@@ -194,17 +200,6 @@ SITES_poor = [
   "GRA_高寒草甸_若尔盖",
   "GRA_人工垂穗披碱草_三江源",
 ]
-SITES_poor_run = intersect(SITES_poor, SITES)
-for i in eachindex(SITES_poor_run)
-  !isCurrentWorker(i) && continue
-  SITE = SITES_poor_run[i]
-  try
-    RunModel(SITE; maxn=MAXN, outdir, goal=:NSE, goal_multiplier=-1,
-      SolveSM_fn=SolveSM_Bonan, overwrite=true)
-  catch ex
-    @error "Error processing site $SITE: $(sprint(showerror, ex))"
-  end
-end
 
-# include("main_vis.jl")
-# plot_result(data_sim, data_obs)
+Process(SITES)
+Process(SITES_poor)

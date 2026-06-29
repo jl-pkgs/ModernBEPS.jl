@@ -59,6 +59,16 @@ end
 fwrite(wide, "$dir/GOF_summary.csv"; missingstring="NA")  # 缺测 NSE/KGE 写为 NA
 fwrite(runtimes, "$dir/runtime.csv")
 
+# SM R² 宽表：优化后各深度 R²，用于评估土壤水分动态（不做量级要求）
+sm = long[long.group.=="SM" .&& long.stage.=="opt", :]
+sm_wide = DataFrame()
+for sub in groupby(sm, [:site, :var])
+  push!(sm_wide, (; site=sub.site[1], var=sub.var[1],
+    R2_opt=round(sub.R2[1], digits=3), NSE_opt=round(sub.NSE[1], digits=3)); cols=:union)
+end
+sort!(sm_wide, :site)
+fwrite(sm_wide, "$dir/SM_R2_summary.csv"; missingstring="NA")
+
 println("已完成站点: ", length(unique(long.site)), " 站\n")
 @printf("%-32s %-4s | %6s %6s | %6s %6s\n", "SITE", "var", "KGE0", "KGE*", "NSE0", "NSE*")
 println("-"^66)
@@ -67,4 +77,7 @@ for r in eachrow(wide)
   @printf("%-32s %-4s | %6s %6s | %6s %6s\n",
     r.site, r.var, fmt(r.KGE0), fmt(r.KGE_opt), fmt(r.NSE0), fmt(r.NSE_opt))
 end
-println("\n写出: $dir/GOF_summary.csv (Flux 宽表), GOF_summary_long.csv (全指标)")
+println("\n写出:")
+println("  $dir/GOF_summary.csv (Flux 宽表)")
+println("  $dir/GOF_summary_long.csv (全指标)")
+println("  $dir/SM_R2_summary.csv (SM 各深度 R²，优化后)")

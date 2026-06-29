@@ -163,3 +163,5 @@ function ra_updateH(SH_o_p::FT, z_wind, canopy_height_o::FT, canopy_height_u::FT
   ra_g = max(120, ra_g)
   return ra_o, ra_u, ra_g
 end
+
+export safe_wind_ref
